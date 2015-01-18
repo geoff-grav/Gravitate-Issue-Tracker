@@ -1,0 +1,109 @@
+/* Controls */
+body { background: #444; font-family: verdana,arial,serif; color: #ccddff; font-size: 12px; margin: 0; padding: 7px; text-align: left; }
+.left { float:left; width: 40%; text-align: left; padding-right: 2%; }
+#screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
+#screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
+.right { float: right; width: 10%; text-align: right; padding-right: 10px; }
+input, textarea, select { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
+textarea {height: 40px; padding: 3px; }
+#sendCapture {margin-top: 3px; }
+#issue-container { text-align: center; padding-top: 6px; }
+#controls { display: none; }
+button {cursor: pointer;}
+.settings { width: 40%; padding-top: 11px; }
+.settings label { width: 40%; display: inline-block; text-align: right; margin-bottom: 2px; white-space: nowrap; }
+.settings input, .settings select { width: 50%; margin-bottom: 2px; }
+
+
+/* Issues */
+#screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
+#screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
+input, textarea { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
+select { background: #444; color: #ccddff; border: 0; width: 100%; font-size: 14px; }
+option { color: #ccddff; }
+#search { float: right; width: 30%; min-width: 120px; }
+
+textarea {height: 34px; padding: 3px; }
+#sendCapture {margin-top: 3px; }
+#issue-container { text-align: center; }
+#controls { display: none; }
+button {cursor: pointer;}
+a { color: #cde; }
+a:hover { color: #fff; }
+.btn { margin: 4px; cursor: pointer; }
+
+/* SlickGrid */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+#view_header {
+	padding: 6px;
+}
+
+#container {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.slick-sort-indicator {
+	width: 0 !important;
+	height: 0 !important;
+	float: none !important;
+	border-left: 5px solid transparent;
+	border-right: 5px solid transparent;
+	background: none !important;
+}
+
+.slick-sort-indicator-asc
+{
+	border-bottom: 5px solid;
+}
+
+.slick-sort-indicator-desc
+{
+	border-top: 5px solid;
+}
+
+.slick-viewport {
+	height: 100% !important;
+}
+
+#description h2 {
+  padding-left: 0.5em;
+}
+
+.slick-header-columns {
+    background-color: #555;
+    border-bottom: 1px solid #999;
+    border-top: 1px solid #999;
+}
+
+body.loading:after {
+	content: '';
+	display: block;
+	background: rgba(68,68,68,0.6);
+	z-index: 10;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+}
+
+.slick-cell > p {
+	padding: 5px;
+	margin: 0;
+	display: block;
+	height: 100%;
+}
+
+.slick-cell.r5 {
+    white-space: normal;
+}
+
+/*.slick-editor { width: 100% !important; max-width: 600px !important; }*/
+.slick-editor textarea { width: 98% !important; }
