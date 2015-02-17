@@ -960,7 +960,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		jQuery(document).ready(function() {
 
 		    setTimeout(function(){
-		    	jQuery('#input').val(parent.windowMain.location.href);
+		    	jQuery('#input').val(parent.gravWindowMain.location.href);
 				parent.document.onkeydown = KeyPress;
 				document.onkeydown = KeyPress;
 
@@ -1052,52 +1052,52 @@ class GRAVITATE_ISSUE_TRACKER {
 		}
 		function closeScreenshot()
 		{
-		    if(parent.windowMain.document.getElementById('drawing'))
+		    if(parent.gravWindowMain.document.getElementById('drawing'))
 		    {
-		        elem=parent.windowMain.document.getElementById('drawing');
+		        elem=parent.gravWindowMain.document.getElementById('drawing');
 		        elem.parentNode.removeChild(elem);
 		        storedLines = [];
-		        $(parent.windowMain.window).off('mousedown').off('mousemove').off('mouseup');
+		        $(parent.gravWindowMain.window).off('mousedown').off('mousemove').off('mouseup');
 		        $('button#capture-status').html('Start Capture');
 		        $('button#capture').hide();
 		    }
 		}
 		function makeScreenshot()
 		{
-			if(parent.windowMain.document.getElementById('drawing'))
+			if(parent.gravWindowMain.document.getElementById('drawing'))
 			{
-				elem=parent.windowMain.document.getElementById('drawing');
+				elem=parent.gravWindowMain.document.getElementById('drawing');
 				elem.parentNode.removeChild(elem);
 				storedLines = [];
-				$(parent.windowMain.window).off('mousedown').off('mousemove').off('mouseup');
+				$(parent.gravWindowMain.window).off('mousedown').off('mousemove').off('mouseup');
 				$('button#capture-status').html('Start Capture');
 				$('button#capture').hide();
 
 			}
 			else
 			{
-				canvas = parent.windowMain.document.createElement('canvas');
+				canvas = parent.gravWindowMain.document.createElement('canvas');
 		        canvas.id = 'drawing';
 		        canvas.style.position = 'absolute';
-		        canvas.style.top = $(parent.windowMain).scrollTop()+'px';
+		        canvas.style.top = $(parent.gravWindowMain).scrollTop()+'px';
 		        canvas.style.left = '0';
 		        canvas.style.bottom = '0';
 		        canvas.style.right = '0';
 		        //canvas.style.border = '6px solid red';
 		        canvas.style.boxShadow = '0 0 0 6px red inset';
 		        canvas.style.zIndex = '1000000000';
-		        canvas.width = $(parent.windowMain).width();
-		        canvas.height = ($(parent.windowMain).height()-6);
+		        canvas.width = $(parent.gravWindowMain).width();
+		        canvas.height = ($(parent.gravWindowMain).height()-6);
 		        canvas.style.width = '100%';
 		        //canvas.draggable = 'false';
 		        //canvas.onclick = function(e){ alert(234); };
 
-				parent.windowMain.document.getElementsByTagName('body')[0].appendChild(canvas);
+				parent.gravWindowMain.document.getElementsByTagName('body')[0].appendChild(canvas);
 
 				//var attach_to = $.browser.msie ? '#drawing' : window;
-				$obj = $(parent.windowMain.window.document.getElementById('drawing'));
+				$obj = $(parent.gravWindowMain.window.document.getElementById('drawing'));
 				ctx = canvas.getContext('2d');
-				$(parent.windowMain.window).mousedown(mDown).mousemove(mMove).mouseup(mDone);
+				$(parent.gravWindowMain.window).mousedown(mDown).mousemove(mMove).mouseup(mDone);
 				$('button#capture-status').html('Cancel Capture');
 				$('button#capture').show();
 			}
@@ -1117,11 +1117,11 @@ class GRAVITATE_ISSUE_TRACKER {
 		    div.style.backgroundSize = '10%';
 		    div.style.opacity = '0.7';
 		    div.style.zIndex = '1000000000';
-		    parent.windowMain.document.body.appendChild(div);
+		    parent.gravWindowMain.document.body.appendChild(div);
 		    //alert(1);
 
 
-		    parent.windowMain.html2canvas(parent.windowMain.document.body, {
+		    parent.gravWindowMain.html2canvas(parent.gravWindowMain.document.body, {
 		        onrendered: function(_canvas) {
 		            //alert(2);
 		            var img_data = _canvas.toDataURL("image/png", 0.1);
@@ -1143,7 +1143,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		                    priority: $('#priority').val(),
 		                    screenshot: '',
 		                    screenshot_data: img_data,
-		                    url: parent.windowMain.location.pathname+parent.windowMain.location.search,
+		                    url: parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search,
 		                    link: $('#link').val(),
 		                },
 		                function(response)
@@ -1155,7 +1155,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		                        $('#controls').hide();
 		                        $('#issue-container').fadeIn();
 		                        closeScreenshot();
-		                        parent.windowMain.document.body.removeChild(parent.windowMain.document.getElementById('captureLoadingDiv'));
+		                        parent.gravWindowMain.document.body.removeChild(parent.gravWindowMain.document.getElementById('captureLoadingDiv'));
 		                    }
 		                    else
 		                    {
@@ -1166,15 +1166,15 @@ class GRAVITATE_ISSUE_TRACKER {
 		            }
 		        },
 		        //type: 'view',
-		        top: $(parent.windowMain.window.document.getElementById('drawing')).offset().top,
-		        height: ($(parent.windowMain).height()+8)
+		        top: $(parent.gravWindowMain.window.document.getElementById('drawing')).offset().top,
+		        height: ($(parent.gravWindowMain).height()+8)
 		    });
 		};
 
 
 		function captureScreenshot()
 		{
-			parent.windowMain.html2canvas(parent.windowMain.document.body, {
+			parent.gravWindowMain.html2canvas(parent.gravWindowMain.document.body, {
 		        onrendered: function(_canvas) {
 
 		        	//canvas = _canvas;
@@ -1183,7 +1183,7 @@ class GRAVITATE_ISSUE_TRACKER {
 					//document.getElementById('redraw').onclick = randomLines;
 				    //randomLines();
 
-		            //parent.windowMain.document.body.appendChild(canvas);
+		            //parent.gravWindowMain.document.body.appendChild(canvas);
 		            var img = _canvas.toDataURL("image/png", 0);
 		            //jQuery('textarea').val(img);
 		            jQuery('#screenshots').append('<img src="'+img+'">');
@@ -1192,8 +1192,8 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		        },
 		        //type: 'view',
-		        top: $(parent.windowMain.window.document.getElementById('drawing')).offset().top,
-				height: ($(parent.windowMain).height()+8)
+		        top: $(parent.gravWindowMain.window.document.getElementById('drawing')).offset().top,
+				height: ($(parent.gravWindowMain).height()+8)
 		    });
 		};
 
@@ -1272,7 +1272,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		// Event handlers
 		function mDown(e)
 		{
-			$(parent.windowMain.document.body).css('cursor','none');
+			$(parent.gravWindowMain.document.body).css('cursor','none');
 			read_position();
 			var p = get_offset(e);
 			if ((p[0] < 0) || (p[1] < 0)) return;
@@ -1300,10 +1300,10 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		function mDone(e)
 		{
-			$(parent.windowMain.document.body).css('cursor','auto');
+			$(parent.gravWindowMain.document.body).css('cursor','auto');
 			if (drawing) {
 				var p = get_offset(e);
-				$(parent.windowMain.document.body).css('cursor','auto');
+				$(parent.gravWindowMain.document.body).css('cursor','auto');
 				debug_msg(['Draw Arrow',ox,oy,p[0],p[1]].toString());
 
 				storedLines.push({
@@ -1418,8 +1418,8 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		function frameLoaded()
 		{
-			jQuery(windowControls.document.getElementById('url')).html(windowMain.location.pathname+windowMain.location.search);
-			windowMain.document.onkeydown = windowControls.KeyPress;
+			jQuery(gravWindowControls.document.getElementById('url')).html(gravWindowMain.location.pathname+gravWindowMain.location.search);
+			gravWindowMain.document.onkeydown = gravWindowControls.KeyPress;
 		}
 
 		function openIssue()
@@ -1443,6 +1443,14 @@ class GRAVITATE_ISSUE_TRACKER {
 		    $('frameset').attr('rows', 28 + ',*');
 		}
 
+		var gravWindowControls;
+		var gravWindowMain;
+
+		jQuery(document).ready(function() {
+			gravWindowControls = windowControls;
+			gravWindowMain = windowMain;
+		});
+
 		</script>
 		</head>
 		<frameset rows="28,*" border="4">
@@ -1460,3 +1468,4 @@ register_activation_hook( __FILE__, array( 'GRAVITATE_ISSUE_TRACKER', 'activate'
 add_action('admin_menu', array( 'GRAVITATE_ISSUE_TRACKER', 'admin_menu' ));
 add_action('init', array( 'GRAVITATE_ISSUE_TRACKER', 'init' ));
 add_action( 'wp_enqueue_scripts', array( 'GRAVITATE_ISSUE_TRACKER', 'enqueue_scripts' ));
+add_action( 'admin_enqueue_scripts', array( 'GRAVITATE_ISSUE_TRACKER', 'enqueue_scripts' ));
