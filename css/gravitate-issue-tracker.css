@@ -1,10 +1,11 @@
 /* Controls */
+html, body { height: 100%; }
 body { background: #444; font-family: verdana,arial,serif; color: #ccddff; font-size: 12px; margin: 0; padding: 7px; text-align: left; }
 .left { float:left; width: 40%; text-align: left; padding-right: 2%; }
 #screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
 #screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
 .right { float: right; width: 10%; text-align: right; padding-right: 10px; }
-input, textarea, select { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
+input[type="text"], textarea, select { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
 textarea {height: 40px; padding: 3px; }
 #sendCapture {margin-top: 3px; }
 #issue-container { text-align: center; padding-top: 6px; }
@@ -18,7 +19,7 @@ button {cursor: pointer;}
 /* Issues */
 #screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
 #screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
-input, textarea { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
+input[type="text"], textarea { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
 select { background: #444; color: #ccddff; border: 0; width: 100%; font-size: 14px; }
 option { color: #ccddff; }
 #search { float: right; width: 30%; min-width: 120px; }
@@ -31,6 +32,29 @@ button {cursor: pointer;}
 a { color: #cde; }
 a:hover { color: #fff; }
 .btn { margin: 4px; cursor: pointer; }
+
+.view-comments .comments-container {  display: block;
+    position:absolute;
+    height:auto;
+    bottom:0;
+    top:0;
+    left:0;
+    right:0;
+    padding-bottom: 80px; }
+.view-comments .comments-list { height: 85%; overflow: auto; }
+.view-comments textarea { width: 83%; height: 28px; border-radius: 4px 0 0 4px; }
+.view-comments form input[type="submit"] {
+	float: right;
+	height: 36px;
+	border-radius: 0 4px 4px 0;
+	border: 1px solid black;
+	cursor: pointer;
+}
+.view-comments form { bottom: 33px; position: absolute;width: 100%; background: inherit; padding-bottom: 6px; }
+.view-comments .comment-title { color: #999; }
+.view-comments .comment-title span { color: white; }
+.view-comments .comment-log { color: #eca; }
+.view-comments .comment-body { padding-left: 30px; margin: 3px 0 12px 0; }
 
 /* SlickGrid */
 html, body {
@@ -107,3 +131,38 @@ body.loading:after {
 
 /*.slick-editor { width: 100% !important; max-width: 600px !important; }*/
 .slick-editor textarea { width: 98% !important; }
+
+
+
+
+
+
+/***************  Colorbox  *****************/
+#colorbox, #cboxOverlay, #cboxWrapper { position: absolute; top: 0; left: 0; z-index: 9999; overflow: hidden; }
+#cboxWrapper { max-width: none; height: 100% !important;}
+#cboxWrapper > div:nth-child(2) { height: 100% !important;}
+#cboxOverlay { position: fixed; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5) repeat 0 0;}
+#cboxMiddleLeft, #cboxBottomLeft { clear: left; }
+#cboxContent { position: relative; overflow: hidden; height: 100% !important; }
+#cboxLoadedContent { overflow: auto; -webkit-overflow-scrolling: touch; margin-top: 28px; height: 100% !important; }
+#cboxTitle { margin: 0; position: absolute; top: 2px; left: 0; width: 100%; color: #949494; }
+#cboxLoadingOverlay, #cboxLoadingGraphic { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+#cboxPrevious, #cboxNext, #cboxClose, #cboxSlideshow { cursor: pointer; }
+.cboxPhoto { float: left; margin: auto; border: 0; display: block; max-width: none; -ms-interpolation-mode: bicubic; border-radius: 4px; }
+.cboxIframe { width: 100%; height: 100%; display: block; border: 0; padding: 0; margin: 0; background: #444; }
+#colorbox, #cboxContent, #cboxLoadedContent { box-sizing: content-box; -moz-box-sizing: content-box; -webkit-box-sizing: content-box; }
+#colorbox { top: 10% !important; height: 80% !important; outline: 0; border: 4px solid #eee; background-color: #444; border-radius: 12px; box-shadow: 0 0 6px rgba(0, 0, 0, 0.5); left: auto !important; right: 142px !important; }
+#cboxError { padding: 50px; border: 1px solid #cccccc; }
+#cboxTopLeft, #cboxTopRight, #cboxBottomLeft, #cboxBottomRight { width: 6px; height: 6px; }
+#cboxMiddleLeft, #cboxMiddleRight { width: 6px; }
+#cboxTopCenter, #cboxBottomCenter { height: 6px; }
+#cboxCurrent { position: absolute; bottom: 4px; left: 58px; color: #949494; }
+#cboxPrevious, #cboxNext, #cboxSlideshow, #cboxClose { border: 0; padding: 0; margin: 0; overflow: visible; width: auto; }
+#cboxPrevious:active, #cboxNext:active, #cboxSlideshow:active, #cboxClose:active { outline: 0; }
+#cboxSlideshow { position: absolute; bottom: 4px; right: 30px; color: #0092ef; }
+#cboxPrevious { position: absolute; bottom: 0; left: 0; width: 25px; height: 25px; text-indent: -9999px; background-color: transparent; background-position: -460px -897px; border-radius: 15px; }
+#cboxNext { position: absolute; bottom: 0; left: 27px; width: 25px; height: 25px; text-indent: -9999px; background-color: transparent; background-position: -476px -897px; border-radius: 15px; }
+#cboxClose { background: #777; position: absolute; top: 0; right: 0; width: 22px; height: 22px; text-indent: 200px; background-position: -14px -842px; border-radius: 15px; }
+#cboxClose:hover { background: #aaa; }
+#cboxClose:after { content: 'X'; display: block; height: 20px;left: -192px;position: absolute;top: 4px;width: 20px; }
+.cboxIE #cboxTopLeft, .cboxIE #cboxTopCenter, .cboxIE #cboxTopRight, .cboxIE #cboxBottomLeft, .cboxIE #cboxBottomCenter, .cboxIE #cboxBottomRight, .cboxIE #cboxMiddleLeft, .cboxIE #cboxMiddleRight { filter: progid:DXImageTransform.Microsoft.gradient(startColorstr=#00FFFFFF, endColorstr=#00FFFFFF); }
