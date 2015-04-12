@@ -57,6 +57,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		if(!empty($_COOKIE['grav_issues_user']))
 		{
 			self::$user = unserialize(base64_decode($_COOKIE['grav_issues_user']));
+			setcookie("grav_issues_user", $_COOKIE['grav_issues_user']     , time()+3600, "/");
 		}
 
 		if((!empty($settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['full_static_url']) !== false) || (!empty($settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['limited_static_url']) !== false) || (!empty($_GET['gravqatracker'])))
@@ -772,7 +773,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		    $(window).resize(function(){
 				var cols = grid.getColumns();
-			    cols[5].width = ($(window).width()-660);
+			    cols[5].width = ($(window).width()-650);
 			    grid.setColumns(cols);
 			    grid.resizeCanvas();
 				add_grid_listeners();
@@ -893,12 +894,12 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		  var data = [],
 		      columns = [
-		          { id: "id", name: "#", field: "id", width: 30, sortable: true, sorter: sorterNumeric },
+		          { id: "id", name: "#", field: "id", width: 40, sortable: true, sorter: sorterNumeric },
 		          { id: "status", name: "Status", field: "status", width: 150, sortable: true, sorter: sorterStringCompare },
 		          { id: "department", name: "Department", field: "department", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "priority", name: "Priority", field: "priority", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "created_by", name: "Created By", field: "created_by", width: 110, sortable: true, sorter: sorterStringCompare },
-		          { id: "description", name: "Description", field: "description", width: ($(window).width()-660), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
+		          { id: "description", name: "Description", field: "description", width: ($(window).width()-650), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
 		          //{ id: "url", name: "URL", field: "url", width: 60, sortable: true, sorter: sorterStringCompare },
 		          //{ id: "screenshot", name: "Screenshot", field: "screenshot", width: 120, sortable: true, sorter: sorterStringCompare }
 		          { id: "info", name: "Info", field: "info", width: 130, sortable: true, sorter: sorterStringCompare }
@@ -956,7 +957,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		            var inner_start = '<p>';
 		            data[<?php echo $num;?>] = {
-		                id: inner_start+"<?php echo $issue->ID;?></p>",
+		                id: "<?php echo $issue->ID;?>",
 		                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 		                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 		                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
@@ -966,7 +967,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		            };
 
 		            _original_grid_data[<?php echo $num;?>] = {
-		                id: inner_start+"<?php echo $issue->ID;?></p>",
+		                id: "<?php echo $issue->ID;?>",
 		                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 		                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 		                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
@@ -1348,6 +1349,10 @@ class GRAVITATE_ISSUE_TRACKER {
 				$('#cancelCapture').show();
 				makeScreenshot();
 				$('#controls textarea').focus();
+				$('#description').val('');
+				$('#priority').val('');
+				$('#link').val('');
+
 			});
 
 		    $('button#view_issues').on('click', function(){

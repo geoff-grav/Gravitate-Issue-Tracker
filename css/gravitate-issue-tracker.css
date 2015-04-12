@@ -37,9 +37,9 @@ h2 { margin: 5px 0; }
 #screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
 #screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
 input[type="text"], textarea { width: 97%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
-#view-issues select { background: #444; color: #ccddff; border: 0; width: 100%; font-size: 14px; }
+#view-issues select { background: #444; color: #ccddff; border: 0; width: 100%; font-size: 14px; padding: 3px; }
 #view-issues option { color: #ccddff; }
-#search { float: right; width: 30%; min-width: 120px; }
+#search { float: right; width: 30%; min-width: 120px; padding: 4px; }
 .user-icon { float: right; margin-left: 20px; cursor: pointer; }
 
 textarea {height: 34px; padding: 3px; }
@@ -93,7 +93,7 @@ html, body {
 
 #grid-container {
   position: absolute;
-  top: 30px;
+  top: 37px;
   left: 0;
   right: 0;
   bottom: 0;
