@@ -1,33 +1,54 @@
 /* Controls */
 html, body { height: 100%; }
 body { background: #444; font-family: verdana,arial,serif; color: #ccddff; font-size: 12px; margin: 0; padding: 7px; text-align: left; }
-.left { float:left; width: 40%; text-align: left; padding-right: 2%; }
+.left { float:left; text-align: left; padding-right: 1%; }
 #screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
 #screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
-.right { float: right; width: 10%; text-align: right; padding-right: 10px; }
+.right { float: right; padding-right: 10px; }
 input[type="text"], textarea, select { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
 textarea {height: 40px; padding: 3px; }
 #sendCapture {margin-top: 3px; }
-#issue-container { text-align: center; padding-top: 6px; }
+#issue-container { text-align: center; padding: 6px 6px 0; }
 #controls { display: none; }
-button {cursor: pointer;}
+button {cursor: pointer; background-color: #ddd;border-radius: 6px;padding: 3px 9px;border: 1px solid;}
+#cancelCapture { background-color: #aaa; width:9%; display: none; }
+#cancelCapture, #issue { width: 120px; }
+#sendCapture { background-color: #dfd; width: 21% }
+button:hover { background-color: white !important; }
 .settings { width: 40%; padding-top: 11px; }
 .settings label { width: 40%; display: inline-block; text-align: right; margin-bottom: 2px; white-space: nowrap; }
 .settings input, .settings select { width: 50%; margin-bottom: 2px; }
+h2 { margin: 5px 0; }
+
+#current-issues { height: 75px; overflow: auto; }
+#current-issues a { white-space: nowrap; text-overflow: ellipsis; display: block; overflow: hidden; }
+#current-issues a span { display: inline-block; padding-right: 12px; }
+
+.cover {
+	display: block;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	top: 0;
+}
 
 
 /* Issues */
 #screenshots { padding: 4px; white-space: nowrap; overflow: auto; height: 76px; }
 #screenshots img { max-height: 72px; max-width: 150px; margin-right: 4px; }
-input[type="text"], textarea { width: 100%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
-select { background: #444; color: #ccddff; border: 0; width: 100%; font-size: 14px; }
-option { color: #ccddff; }
+input[type="text"], textarea { width: 97%; background: #ccc; border: none; font-family: verdana,arial,serif; color: #444; font-size: 12px; padding: 0;}
+#view-issues select { background: #444; color: #ccddff; border: 0; width: 100%; font-size: 14px; }
+#view-issues option { color: #ccddff; }
 #search { float: right; width: 30%; min-width: 120px; }
+.user-icon { float: right; margin-left: 20px; cursor: pointer; }
 
 textarea {height: 34px; padding: 3px; }
 #sendCapture {margin-top: 3px; }
 #issue-container { text-align: center; }
-#controls { display: none; }
+#controls { display: none; padding: 6px; margin-top: -18px; }
+#controls input, #controls textarea, #controls select { margin: 4px 0.2%; padding: 3px }
+#controls input, #controls select { width: 37%; }
+
 button {cursor: pointer;}
 a { color: #cde; }
 a:hover { color: #fff; }
@@ -56,6 +77,9 @@ a:hover { color: #fff; }
 .view-comments .comment-log { color: #eca; }
 .view-comments .comment-body { padding-left: 30px; margin: 3px 0 12px 0; }
 
+#user-profile input { max-width: 300px; }
+#user-profile { max-width: 700px; margin: auto; }
+
 /* SlickGrid */
 html, body {
   margin: 0;
@@ -67,7 +91,7 @@ html, body {
 	padding: 6px;
 }
 
-#container {
+#grid-container {
   position: absolute;
   top: 30px;
   left: 0;
@@ -95,7 +119,8 @@ html, body {
 }
 
 .slick-viewport {
-	height: 100% !important;
+	/*height: 100% !important;*/
+	overflow-x: hidden !important;
 }
 
 #description h2 {
@@ -150,7 +175,7 @@ body.loading:after {
 #cboxPrevious, #cboxNext, #cboxClose, #cboxSlideshow { cursor: pointer; }
 .cboxPhoto { float: left; margin: auto; border: 0; display: block; max-width: none; -ms-interpolation-mode: bicubic; border-radius: 4px; }
 .cboxIframe { width: 100%; height: 100%; display: block; border: 0; padding: 0; margin: 0; background: #444; }
-#colorbox, #cboxContent, #cboxLoadedContent { box-sizing: content-box; -moz-box-sizing: content-box; -webkit-box-sizing: content-box; }
+#colorbox, #cboxContent, #cboxLoadedContent { box-sizing: content-box; -moz-box-sizing: content-box; -webkit-box-sizing: content-box; overflow: hidden !important; }
 #colorbox { top: 10% !important; height: 80% !important; outline: 0; border: 4px solid #eee; background-color: #444; border-radius: 12px; box-shadow: 0 0 6px rgba(0, 0, 0, 0.5); left: auto !important; right: 142px !important; }
 #cboxError { padding: 50px; border: 1px solid #cccccc; }
 #cboxTopLeft, #cboxTopRight, #cboxBottomLeft, #cboxBottomRight { width: 6px; height: 6px; }

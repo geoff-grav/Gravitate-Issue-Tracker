@@ -10,6 +10,9 @@ Description: This is Plugin allows you and your users to Track Website issues.
 Version: 1.0.0
 */
 
+ini_set('error_reporting', E_ALL);
+ini_set('display_errors', 1);
+
 // Make sure we don't expose any info if called directly
 if ( !function_exists( 'add_action' ) ) {
 	echo 'Gravitate Issue Tracker.';
@@ -23,17 +26,25 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	private static $uri;
 
+	private static $user = false;
+	private static $access = false;
+
 	static function activate()
 	{
-		// Set Default Data
-		$settings = array();
-		$settings['static_url'] = 'gissues';
-		$settings['status'] = "RESOLVED : lightgreen\nPending : orange\nAddressed : #77bbff\nDiscussion : #ff3333\nFuture Request : #ff88ff";
-		$settings['priorities'] = "URGENT : #ff3333\nHigh : orange\nNormal : lightgrey\nLow : #77bbff\nFuture : #ff88ff";
-		$settings['departments'] = "Developer\nDesign\nAccount Manager\nDigital Marketer\nClient : white";
+		if(!get_option(self::$option_key))
+		{
+			// Set Default Data
+			$settings = array();
+			$settings['hash_full_url'] = md5(wp_generate_password());
+			$settings['hash_limited_url'] = md5(wp_generate_password());
+			$settings['full_static_url'] = 'qatrackeradmin';
+			$settings['limited_static_url'] = 'qatracker';
+			$settings['status'] = "RESOLVED : lightgreen\nPending : orange\nAddressed : #77bbff\nDiscussion : #ff3333\nFuture Request : #ff88ff";
+			$settings['priorities'] = "URGENT : #ff3333\nHigh : orange\nNormal : lightgrey\nLow : #77bbff\nFuture : #ff88ff";
+			$settings['departments'] = "Developer\nDesign\nAccount Manager\nDigital Marketer\nClient : white";
 
-		update_option(self::$option_key, $settings);
-
+			update_option(self::$option_key, $settings);
+		}
 	}
 
 	static function init()
@@ -41,18 +52,69 @@ class GRAVITATE_ISSUE_TRACKER {
 		$settings = get_option(self::$option_key);
 
 		self::$uri = str_replace('?'.$_SERVER['QUERY_STRING'], '', $_SERVER['REQUEST_URI']);
+		self::$uri.= (!empty($_GET['gravqatracker']) ? '?gravqatracker='.$_GET['gravqatracker'].'&' : '?');
 
-		if(!empty($settings['static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['static_url']) !== false || !empty($_GET[$settings['static_url']]))
+		if(!empty($_COOKIE['grav_issues_user']))
 		{
-			if(!is_user_logged_in())
+			self::$user = unserialize(base64_decode($_COOKIE['grav_issues_user']));
+		}
+
+		if((!empty($settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['full_static_url']) !== false) || (!empty($settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['limited_static_url']) !== false) || (!empty($_GET['gravqatracker'])))
+		{
+			$url_type = 'static';
+			if(!empty($_GET['gravqatracker']))
 			{
-				echo 'You must be logged in';
+				if($_GET['gravqatracker'] == $settings['hash_full_url'])
+				{
+					self::$access = 'full';
+				}
+				else if($_GET['gravqatracker'] == $settings['hash_limited_url'])
+				{
+					self::$access = 'limited';
+				}
+				$url_type = 'hash';
+			}
+			else if(!empty($settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['full_static_url']) !== false)
+			{
+				self::$access = 'full';
+			}
+			else if(!empty($settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['limited_static_url']) !== false)
+			{
+				self::$access = 'limited';
+			}
+
+			$ips = array_map('trim', explode(',',$settings['ips']));
+			$ips[] = '127.0.0.1';
+
+			$is_ip_allowed = false;
+
+			foreach ($ips as $ip)
+			{
+				if(strpos(self::real_ip(), $ip) !== false)
+				{
+					$is_ip_allowed = true;
+				}
+			}
+
+			if($url_type == 'static' && !is_user_logged_in() && !$is_ip_allowed)
+			{
+				echo 'You do not have access';
 				exit;
+			}
+
+			if(!empty($_POST['grav_issues_user_email']) && !empty($_POST['save_user_profile']))
+			{
+				$value = base64_encode(serialize(array('email' => $_POST['grav_issues_user_email'], 'name' => $_POST['grav_issues_user_name'], 'access' => self::$access)));
+				if(setcookie("grav_issues_user", $value, time()+3600, "/"))
+				{
+					header("Location: ".$_SERVER['REQUEST_URI']);
+					exit;
+				}
 			}
 
 			if(!empty($_POST['update_data']))
 			{
-				if(defined('DOING_AJAX'))
+				if(!defined('DOING_AJAX'))
 				{
 					define('DOING_AJAX', true);
 				}
@@ -60,9 +122,19 @@ class GRAVITATE_ISSUE_TRACKER {
 				exit;
 			}
 
+			if(!empty($_POST['get_current_page_issues']))
+			{
+				if(!defined('DOING_AJAX'))
+				{
+					define('DOING_AJAX', true);
+				}
+				self::get_current_page_issues($_POST['url']);
+				exit;
+			}
+
 			if(!empty($_POST['save_issue']))
 			{
-				if(defined('DOING_AJAX'))
+				if(!defined('DOING_AJAX'))
 				{
 					define('DOING_AJAX', true);
 				}
@@ -72,7 +144,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 			if(!empty($_POST['save_log']))
 			{
-				if(defined('DOING_AJAX'))
+				if(!defined('DOING_AJAX'))
 				{
 					define('DOING_AJAX', true);
 				}
@@ -82,7 +154,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 			if(!empty($_POST['delete_issue']))
 			{
-				if(defined('DOING_AJAX'))
+				if(!defined('DOING_AJAX'))
 				{
 					define('DOING_AJAX', true);
 				}
@@ -92,12 +164,26 @@ class GRAVITATE_ISSUE_TRACKER {
 
 			if(!empty($_GET['gissues_controls']))
 			{
-				self::controls();
+				if(empty(self::$user))
+				{
+					self::user_profile();
+				}
+				else
+				{
+					self::controls();
+				}
 				exit;
 			}
 			else if(!empty($_GET['view_issues']))
 			{
-				self::view_issues();
+				if(empty(self::$user))
+				{
+					self::user_profile();
+				}
+				else
+				{
+					self::view_issues();
+				}
 				exit;
 			}
 			else if(!empty($_GET['view_comments']))
@@ -117,6 +203,73 @@ class GRAVITATE_ISSUE_TRACKER {
 		}
 	}
 
+	private static function get_current_page_issues($url)
+	{
+
+		$settings = get_option(self::$option_key);
+
+        $selects = array('status');
+
+	    foreach ($selects as $select)
+	    {
+	    	if(!empty($settings[$select]))
+		    {
+		    	$items = $settings[$select];
+		    	$settings[$select] = array();
+			    foreach (explode("\n", str_replace("\r", '', $items)) as $key => $value)
+			    {
+			    	$color = trim(strpos($value, ':') ? substr($value, (strpos($value, ':')+1)) : '');
+			    	$value = trim(strpos($value, ':') ? substr($value, 0, strpos($value, ':')) : $value);
+			    	$settings[$select][] = array('value' => $value, 'color' => $color);
+			    }
+			}
+	    }
+
+		$issues = get_posts(array('post_type' => 'gravitate_issue', 'post_status' => 'draft', 'posts_per_page' => -1));
+		$items = array();
+	    if($issues)
+	    {
+	        $num = 0;
+	        foreach($issues as $issue)
+	        {
+	        	$data = get_post_meta( $issue->ID, 'gravitate_issue_data', 1);
+
+	        	if($url == $data['url'])
+	        	{
+		            $description = str_replace('"','', $data['description']);
+		            $description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
+
+		            $status = '';
+		            $color = '';
+
+		            if(!empty($settings['status']))
+		            {
+		            	foreach($settings['status'] as $k => $v)
+		            	{
+		          			if($data['status'] == sanitize_title($v['value']))
+		          			{
+		          				$status = $v['value'];
+		          				$color = $v['color'];
+		          			}
+		          		}
+		          	}
+
+		            $item = array();
+		            $item['id'] = $issue->ID;
+		            $item['description'] = $description;
+		            $item['status'] = $status;
+		            $item['color'] = $color;
+		            $item['created_by'] = ucwords($data['created_by']);
+
+		            $items[] = $item;
+		        }
+
+	        }
+	    }
+	    echo json_encode($items);
+	    exit;
+	}
+
 	private static function update_data($post_id, $key, $value)
 	{
 		$meta_value = get_post_meta( $post_id, 'gravitate_issue_data', true );
@@ -128,7 +281,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		}
 
 		// Update Issue
-	    if(!empty($meta_value) && isset($meta_value[$key]))
+	    if((self::$access === 'full' || (self::$access === 'limited' && $key != 'department')) && !empty($meta_value) && isset($meta_value[$key]))
 	    {
 	    	$meta_value[$key] = $value;
 
@@ -143,7 +296,7 @@ class GRAVITATE_ISSUE_TRACKER {
 	    	{
 	    		echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
 
-	    		self::save_log($post_id, 'GG', 'Changed: '.ucwords($key).' to '.ucwords($value));
+	    		self::save_log($post_id, self::$user['name'], 'Changed: '.ucwords($key).' to '.ucwords($value));
 
 	    		exit;
 	    	}
@@ -155,21 +308,24 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	private static function delete_issue()
 	{
-		// Delete Issue
-	    if(!empty($_POST['delete_issue']))
-	    {
-	    	if($issue = get_post($_POST['delete_issue']))
-	    	{
-	    		if(delete_post_meta($issue->ID, 'gravitate_issue_data'))
-	    		{
-		    		if(wp_delete_post($issue->ID, true))
+		if(self::$access === 'full')
+		{
+			// Delete Issue
+		    if(!empty($_POST['delete_issue']))
+		    {
+		    	if($issue = get_post($_POST['delete_issue']))
+		    	{
+		    		if(delete_post_meta($issue->ID, 'gravitate_issue_data'))
 		    		{
-		    			echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
-						exit;
-		    		}
+			    		if(wp_delete_post($issue->ID, true))
+			    		{
+			    			echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
+							exit;
+			    		}
+			    	}
 		    	}
-	    	}
-	    }
+		    }
+		}
 
 	    echo 'Error';
 		exit;
@@ -209,7 +365,7 @@ class GRAVITATE_ISSUE_TRACKER {
 			'post_type'             => 'gravitate_issue_com',
 			'post_author'           => 1,
 			'post_content'		  	=> esc_sql($_POST['comment']),
-			'post_title'		  	=> 'GG123',//esc_sql($_POST['created_by'])
+			'post_title'		  	=> self::$user['name'],
 		);
 
 		return wp_insert_post($args);
@@ -275,7 +431,7 @@ class GRAVITATE_ISSUE_TRACKER {
 				$postdata['status'] = esc_sql((!empty($_POST['status']) ? $_POST['status'] : 2));
 				$postdata['priority'] = esc_sql($_POST['priority']);
 				$postdata['department'] = esc_sql($_POST['department']);
-				$postdata['created_by'] = esc_sql($current_user);
+				$postdata['created_by'] = esc_sql(self::$user['name']);
 				$postdata['screenshot'] = $upload_dir['url'].'/'.$image_name;
 				$postdata['url'] = esc_sql($_POST['url']);
 				$postdata['browser'] = esc_sql($_POST['browser']);
@@ -289,7 +445,7 @@ class GRAVITATE_ISSUE_TRACKER {
 				if(update_post_meta($post_id, 'gravitate_issue_data', $postdata))
 				{
 					echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
-					self::save_log($post_id, 'GG', 'Created Issue');
+					self::save_log($post_id, self::$user['name'], 'Created Issue');
 					exit;
 				}
 			}
@@ -319,8 +475,9 @@ class GRAVITATE_ISSUE_TRACKER {
 			$settings = array();
 
 			$fields = array();
-			$fields['static_url'] = array('type' => 'text', 'label' => 'Static URL', 'value' => 'gissues', 'description' => 'Users must be logged in or coming from the Allowed IPs to access this.');
-			$fields['ips'] = array('type' => 'text', 'label' => 'Allowed IPs', 'description' => 'IPs that are allowed access without Logging into WordPress.  Separate with commas. ');
+			$fields['full_static_url'] = array('type' => 'text', 'label' => 'Full Access URL', 'value' => 'qatrackeradmin', 'description' => 'Users must be logged in or coming from the Allowed IPs to access this.');
+			$fields['limited_static_url'] = array('type' => 'text', 'label' => 'Limited Access URL', 'value' => 'qatracker', 'description' => 'Users must be logged in or coming from the Allowed IPs to access this.');
+			$fields['ips'] = array('type' => 'text', 'label' => 'Allowed IPs', 'description' => 'IPs that are allowed access without Logging into WordPress.  Separate with commas. 127.0.0.1 is automatically added.');
 
 			$fields['status'] = array('type' => 'textarea', 'label' => 'Status List', 'value' => "RESOLVED\nPending\nAddressed\nDiscussion\nFuture Request", 'description' => 'One Per Line.  Place them in order of what you want the Sort Order to be.<br> Separate colors with : &nbsp; &nbsp; Colors can be Hex code.');
 			$fields['priorities'] = array('type' => 'textarea', 'label' => 'Priority List', 'value' => "URGENT\nHigh\nNormal\nLow\nFuture", 'description' => 'One Per Line.  Place them in order of what you want the Sort Order to be.<br> Separate colors with : &nbsp; &nbsp; Colors can be Hex code.');
@@ -342,9 +499,11 @@ class GRAVITATE_ISSUE_TRACKER {
 			{
 				if(!empty($_POST['save_settings']) && !empty($_POST['settings']))
 				{
-					// $error = 'There was an error saving the Settings (Cannot access disk). Please try again.';
 					$_POST['settings']['updated_at'] = time();
-					if(update_option( self::$option_key, $_POST['settings'] ))
+					$settings = array_merge(get_option(self::$option_key), $_POST['settings']);
+					// $error = 'There was an error saving the Settings (Cannot access disk). Please try again.';
+
+					if(update_option( self::$option_key, $settings ))
 					{
 						$success = 'Settings Saved Successfully';
 					}
@@ -376,8 +535,12 @@ class GRAVITATE_ISSUE_TRACKER {
 							<input type="hidden" name="save_settings" value="1">
 							<table class="form-table">
 							<tr>
-								<th><label>Non-Logged in Users Access</label></th>
-								<td><a href="">sdfasdfsadfasfd</a></td>
+								<th><label>Full User Access</label></th>
+								<td><a target="_blank" href="<?php echo site_url().'/?gravqatracker='.$settings['hash_full_url'];?>"><?php echo site_url().'/?gravqatracker='.$settings['hash_full_url'];?></a></td>
+							</tr>
+							<tr>
+								<th><label>Limited User Access</label></th>
+								<td><a target="_blank" href="<?php echo site_url().'/?gravqatracker='.$settings['hash_limited_url'];?>"><?php echo site_url().'/?gravqatracker='.$settings['hash_limited_url'];?></a></td>
 							</tr>
 							<?php
 							foreach($fields as $meta_key => $field)
@@ -473,6 +636,7 @@ class GRAVITATE_ISSUE_TRACKER {
 					$args['post_type'] = array('gravitate_issue_log','gravitate_issue_com');
 					$args['post_status'] = 'draft';
 					$args['order'] = 'ASC';
+					$args['posts_per_page'] = -1;
 
 
 					$comments = new WP_Query($args);
@@ -536,10 +700,14 @@ class GRAVITATE_ISSUE_TRACKER {
 		<script src="<?php echo plugins_url( 'slickgrid/slick.editors.js?v=01', __FILE__ );?>"></script>
 
 		</head>
-		<body>
-		<div id="view_header"><button id="cancel_views" onclick="">< Back</button> <input placeholder="Filter..." id="search" type="text"></div>
-		<div id="container"></div>
+		<body id="view-issues">
+		<div id="view_header"><button id="cancel_views" onclick="">< Back</button> <a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a> <input placeholder="Filter..." id="search" type="text"> </div>
+		<div id="grid-container"></div>
 		<script>
+
+		var grid;
+
+		parent.openViewIssues();
 
 		var _original_grid_data = [];
 
@@ -547,7 +715,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 			$('button#cancel_views').on('click', function(){
 		        parent.closeIssue();
-		        window.open('?gissues_controls=1', '_self');
+		        window.open('?<?php echo (!empty($_GET['gravqatracker']) ? 'gravqatracker='.$_GET['gravqatracker'].'&' : '');?>gissues_controls=1', '_self');
 		    });
 
 		    $('#search').on('keyup', function()
@@ -593,6 +761,18 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		    });
 
+		    $('.user-icon').on('click', function(e){
+		    	parent.userLogout();
+		    });
+
+		    $(window).resize(function(){
+				var cols = grid.getColumns();
+			    cols[5].width = ($(window).width()-660);
+			    grid.setColumns(cols);
+			    grid.resizeCanvas();
+				add_grid_listeners();
+			});
+
 		});
 
 		function add_grid_listeners()
@@ -600,6 +780,12 @@ class GRAVITATE_ISSUE_TRACKER {
 	    	$('select').each(function(){
 	    		$(this).css('color', $(this).find(":selected").attr('data-color'));
 	    	});
+
+	    	if('<?php echo self::$access;?>' != 'full')
+			{
+				$('select.department').attr('disabled', 'disabled');
+				$('select.department').parent().css('position', 'relative').append('<span class="cover" onclick="alert(\'You do not have permission to edit this.\')"></span>');
+			}
 
 		    $('.update_data').on('change', function(){
 
@@ -613,7 +799,7 @@ class GRAVITATE_ISSUE_TRACKER {
                 var active = grid.getActiveCell();
                 var cols = grid.getColumns();
 
-		        $.post( '<?php echo $_SERVER['REQUEST_URI'];?>', {
+		        $.post( '<?php echo self::$uri;?>', {
 	                update_data: true,
 	                issue_id: data[active.row].id.split('<p>').join('').split('</p>').join(''),
 	                issue_key: $(this).attr('id'),
@@ -645,34 +831,44 @@ class GRAVITATE_ISSUE_TRACKER {
 		    });
 
 			$('a.comments').on('click', function(){
-				$.colorbox({iframe: true, title: 'Comments', href: '<?php echo self::$uri;?>?view_comments=1&issue_id='+$(this).attr('data-issue-id'), height: '80%', width: '50%', maxWidth: '400px', maxHeight: '300px'});
+				$.colorbox({iframe: true, title: 'Comments', href: '<?php echo self::$uri;?>view_comments=1&issue_id='+$(this).attr('data-issue-id'), height: '80%', width: '50%', maxWidth: '400px', maxHeight: '300px'});
 			});
 		}
 
 		function delete_issue(issue_id)
 		{
-			$.post( '<?php echo $_SERVER['REQUEST_URI'];?>', {
-                delete_issue: issue_id,
-            },
-            function(response)
-            {
-                //alert(response);
-                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
-                {
-                    //
-                    var data = grid.getData();
-					data.splice(grid.getActiveCell().row, 1);
-					_original_grid_data.splice(grid.getActiveCell().row, 1);
-					grid.setData(data);
-					grid.render();
-					add_grid_listeners();
-                }
-                else
-                {
-                    // Error
-                    alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
-                }
-            });
+			if('<?php echo self::$access;?>' != 'full')
+			{
+				alert('You do not have permission to delete issues.');
+			}
+			else
+			{
+				if(confirm('You are about to Delete this Issue.\\n\\nClick OK to continue.'))
+				{
+					$.post( '<?php echo self::$uri;?>', {
+		                delete_issue: issue_id,
+		            },
+		            function(response)
+		            {
+		                //alert(response);
+		                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
+		                {
+		                    //
+		                    var data = grid.getData();
+							data.splice(grid.getActiveCell().row, 1);
+							_original_grid_data.splice(grid.getActiveCell().row, 1);
+							grid.setData(data);
+							grid.render();
+							add_grid_listeners();
+		                }
+		                else
+		                {
+		                    // Error
+		                    alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
+		                }
+		            });
+				}
+			}
 		}
 
 		function HTMLFormatter(row, cell, value, columnDef, dataContext) {
@@ -690,8 +886,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		    return sortdir * (x === y ? 0 : (x > y ? 1 : -1));
 		}
 
-		  var grid,
-		      data = [],
+		  var data = [],
 		      columns = [
 		          { id: "id", name: "#", field: "id", width: 30, sortable: true, sorter: sorterNumeric },
 		          { id: "status", name: "Status", field: "status", width: 150, sortable: true, sorter: sorterStringCompare },
@@ -707,6 +902,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		        enableCellNavigation: true,
 		        enableColumnReorder: true,
 		        multiColumnSort: true,
+		        //autoHeight: true,
 		        //forceFitColumns: true,
 		        syncColumnCellResize: true,
 		        rowHeight: 40,
@@ -733,7 +929,7 @@ class GRAVITATE_ISSUE_TRACKER {
 				}
 		    }
 
-		    $issues = get_posts(array('post_type' => 'gravitate_issue', 'post_status' => 'draft'));
+		    $issues = get_posts(array('post_type' => 'gravitate_issue', 'post_status' => 'draft', 'posts_per_page' => -1));
 
 		    if($issues)
 		    {
@@ -742,6 +938,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		        {
 		        	$data = get_post_meta( $issue->ID, 'gravitate_issue_data', 1);
 		            $description = str_replace('"','', $data['description']);
+		            $description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
 
 		            $args = array();
 					$args['post_parent'] = $issue->ID;
@@ -752,30 +949,25 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		            ?>
 
-
-
 		            var inner_start = '<p>';
 		            data[<?php echo $num;?>] = {
 		                id: inner_start+"<?php echo $issue->ID;?></p>",
-		                //status: inner_start+"<?php echo $data['status'];?></p>",
-		                status: inner_start+"<select id=\"status\" class=\"update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                department: inner_start+"<select id=\"department\" class=\"update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                priority: inner_start+"<select id=\"priority\" class=\"update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+		                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+		                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+		                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 		                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
-		                description: inner_start+'<?php echo strip_tags(str_replace(array("\n","\r","'"), "", $description));?></p>',
-		                //url: inner_start+"<a target=\"windowMain\" href=\"<?php echo $data['url'];?>\">url</a></p>",
-		                //screenshot: inner_start+"<a target=\"windowMain\" href=\"<?php echo $data['screenshot'];?>\">Screenshot</a></p>"
-		                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="if(confirm(\'You are about to Delete this Issue.\\n\\nClick OK to continue.\')){delete_issue(<?php echo $issue->ID;?>);};"><i class="fa fa-close"></i></a></p>'
+		                description: inner_start+'<?php echo $description;?></p>',
+		                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="delete_issue(<?php echo $issue->ID;?>);"><i class="fa fa-close"></i></a></p>'
 		            };
 
 		            _original_grid_data[<?php echo $num;?>] = {
 		                id: inner_start+"<?php echo $issue->ID;?></p>",
-		                status: inner_start+"<select id=\"status\" class=\"update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                department: inner_start+"<select id=\"department\" class=\"update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                priority: inner_start+"<select id=\"priority\" class=\"update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+		                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+		                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+		                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 		                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
-		                description: inner_start+'<?php echo strip_tags(str_replace(array("\n","\r","'"), "", $description));?></p>',
-		                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="if(confirm(\'You are about to Delete this Issue.\\n\\nClick OK to continue.\')){delete_issue(<?php echo $issue->ID;?>);};"><i class="fa fa-close"></i></a></p>'
+		                description: inner_start+'<?php echo $description;?></p>',
+		                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="delete_issue(<?php echo $issue->ID;?>);"><i class="fa fa-close"></i></a></p>'
 		            };
 
 		            <?php
@@ -784,9 +976,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		    }
 		    ?>
 
-		  	grid = new Slick.Grid("#container", data, columns, options);
-
-
+		  	grid = new Slick.Grid("#grid-container", data, columns, options);
 
 			// grid.onSort.subscribe(function (e, args) {
 			//   currentSortCol = args.sortCol;
@@ -805,7 +995,7 @@ class GRAVITATE_ISSUE_TRACKER {
                 {
                 	$('body').addClass('loading');
 
-	                $.post( '<?php echo $_SERVER['REQUEST_URI'];?>', {
+	                $.post( '<?php echo self::$uri;?>', {
 		                update_data: true,
 		                issue_id: args.item.id.split('<p>').join('').split('</p>').join(''),
 		                issue_key: 'description',
@@ -832,6 +1022,13 @@ class GRAVITATE_ISSUE_TRACKER {
 
 			grid.onColumnsReordered.subscribe(function(e, args) {
 				add_grid_listeners();
+			});
+
+			grid.onViewportChanged.subscribe(function() {
+				add_grid_listeners();
+				setTimeout(function(){
+					add_grid_listeners();
+				}, 200);
 			});
 
 			grid.onSort.subscribe(function (e, args) {
@@ -872,6 +1069,44 @@ class GRAVITATE_ISSUE_TRACKER {
 		<?php
 	}
 
+	public static function user_profile()
+	{
+		?>
+		<!doctype html>
+		<html lang="en-US">
+		<head>
+		<meta charset="utf-8">
+		<title>Issues</title>
+		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
+		<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
+		<script type='text/javascript'>
+			parent.openIssue();
+		</script>
+		</head>
+		<body>
+			<div id="user-profile">
+				<h2> Create your Profile</h2>
+				<form method="post">
+					<input type="hidden" name="save_user_profile" value="1">
+					<div class="left">
+						<label>Your Email *</label>
+						<input type="text" name="grav_issues_user_email" required>
+					</div>
+				    <div class="left">
+				        <label>Display Name *</label>
+				        <input type="text" name="grav_issues_user_name" required>
+				    </div>
+				    <div class="right"><br>
+				        <input type="submit" name="submit" value="Next">
+				    </div>
+				</form>
+			</div>
+		</body>
+		</html>
+
+		<?php
+	}
+
 	static function controls()
 	{
 		$settings = get_option(self::$option_key);
@@ -882,9 +1117,12 @@ class GRAVITATE_ISSUE_TRACKER {
 		<head>
 		<meta charset="utf-8">
 		<title>Issues</title>
+		<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
 		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
 		<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
 		<script type='text/javascript'>
+
+		parent.closeIssue();
 
 		navigator.sayswho= (function(){
 		    var ua= navigator.userAgent, tem,
@@ -1087,6 +1325,10 @@ class GRAVITATE_ISSUE_TRACKER {
 				captureScreenshot();
 			});
 
+			$('.user-icon').on('click', function(e){
+		    	parent.userLogout();
+		    });
+
 			$('button#capture').hide();
 
 			$('button#capture-status').on('click', function(){
@@ -1094,16 +1336,18 @@ class GRAVITATE_ISSUE_TRACKER {
 			});
 
 			$('button#issue').on('click', function(){
+				update_current_issues();
 				parent.openIssue();
-				$('#issue-container').hide();
+				$('#issue').hide();
 				$('#controls').fadeIn();
+				$('#cancelCapture').show();
 				makeScreenshot();
 				$('#controls textarea').focus();
 			});
 
 		    $('button#view_issues').on('click', function(){
-		        parent.openViewIssues();
-		        window.open('/<?php echo $settings['static_url'];?>?view_issues=true', '_self');
+		        //parent.openViewIssues();
+		        window.open('<?php echo self::$uri;?>view_issues=true', '_self');
 		    });
 
 			$('button#sendCapture').on('click', function(){
@@ -1111,10 +1355,6 @@ class GRAVITATE_ISSUE_TRACKER {
 		        if(!$('#description').val())
 		        {
 		            alert('You must provide a Description');
-		        }
-		        else if(!$('#created_by').val())
-		        {
-		            alert('You must provide your Initials');
 		        }
 		        else if(!$('#priority').val())
 		        {
@@ -1138,7 +1378,8 @@ class GRAVITATE_ISSUE_TRACKER {
 			$('button#cancelCapture').on('click', function(){
 				parent.closeIssue();
 				$('#controls').hide();
-				$('#issue-container').fadeIn();
+				$('#cancelCapture').hide();
+				$('#issue').show();
 				closeScreenshot();
 			});
 
@@ -1246,7 +1487,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		            if(img_data)
 		            {
 		                //alert(3);
-		                $.post( '<?php echo $_SERVER['REQUEST_URI'];?>', {
+		                $.post( '<?php echo self::$uri;?>', {
 		                    save_issue: true,
 		                    status: 'pending',
 		                    description: $('#description').val(),
@@ -1473,50 +1714,68 @@ class GRAVITATE_ISSUE_TRACKER {
 		var ox,oy;
 		var drawing;
 
+
+		function update_current_issues()
+		{
+			 $.post( '<?php echo self::$uri;?>', {
+                get_current_page_issues: true,
+                url: parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search,
+            },
+            function(response)
+            {
+                if(response)
+                {
+                	$('#current-issues').html('');
+                	response = response.split(']');
+                	response = response[0]+']';
+                	//alert(response);
+                	var items = JSON.parse(response);
+                	for(var i in items)
+                	{
+                		//alert(items[i].id);
+                		$('#current-issues').append('<a title="# '+items[i].id+'&#13;Status: '+items[i].status+'&#13;Created By: '+items[i].created_by+'&#13;'+items[i].description+'"><span>#'+items[i].id+'</span><span style="color:'+items[i].color+';">'+items[i].status+'</span>'+items[i].description+'</a>');
+                	}
+                }
+            });
+		}
+
 		</script>
 		</head>
 		<body>
+		<div id="issue-container">
+			<button id="cancelCapture">Cancel</button><button id="issue">Submit Issue</button> &nbsp; &nbsp; <button id="view_issues">View Issues</button>
+			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
+		</div>
 		<div id="controls">
-			<div class="left">
-				Description *<br>
-				<textarea id="description" required></textarea>
-			</div>
-		    <div class="left settings">
-		        <label>Your Initials *</label>
-		        <input type="text" id="created_by" name="created_by" required><br>
-		        <label>Priority *</label>
+			<div class="left" style="width: 63%;">
+				<label>Description *</label><br>
+				<textarea id="description" placeholder="Description *" required></textarea>
+				<br>
 		        <select id="priority" name="priority" required>
 		            <option value="urgent">URGENT</option>
 		            <option value="high">High</option>
-		            <option value="" selected="selected">- Select -</option>
+		            <option value="" selected="selected">- Priority * -</option>
 		            <option value="normal">Normal</option>
 		            <option value="low">Low</option>
 		            <option value="future_request">Future Request</option>
-		        </select><br>
-		        <label>(optional link)</label>
-		        <input type="text" id="link" name="link" placeholder="http://">
-		    </div>
+		        </select>
+		        <input type="text" id="link" name="link" placeholder="(optional link)">
+		        <button id="sendCapture">Submit Issue</button>
+			</div>
+			<div class="right" style="width: 34%;">
+				<label>Current Issues on this page</label><br>
+				<div id="current-issues">
 
-			<!-- <div class="left">
-				ScreenShots -
-				<button id="capture-status">Start Capture</button> (ctrl+c) &nbsp;
-				<button id="capture">Save Capture</button>
-				<br>
-				<div id="screenshots"></div>
-			</div> -->
+				</div>
+			</div>
 
-			<div id="right" class="right">
-				<!-- <span id="url"></span><br>
+			<!-- <div id="right" class="right">
+				<span id="url"></span><br>
 				<script>document.write(navigator.sayswho);</script><br>
 				<script>document.write(jscd.os +' '+ jscd.osVersion);</script><br>
 				<span id="screenSize"></span> (<script>document.write(jscd.screen);</script>)<br>
-				<?php echo $_SERVER['REMOTE_ADDR'];?> -->
-				<br>
-				<button id="cancelCapture">Cancel</button><br><button id="sendCapture">Submit</button>
-			</div>
-		</div>
-		<div id="issue-container">
-			<button id="issue">Submit Issue</button> &nbsp; &nbsp; <button id="view_issues">View Issues</button>
+				<?php echo $_SERVER['REMOTE_ADDR'];?>
+			</div> -->
 		</div>
 		</body>
 		</html>
@@ -1535,8 +1794,18 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		function frameLoaded()
 		{
-			jQuery(gravWindowControls.document.getElementById('url')).html(gravWindowMain.location.pathname+gravWindowMain.location.search);
+			//jQuery(gravWindowControls.update_current_issues());
 			gravWindowMain.document.onkeydown = gravWindowControls.KeyPress;
+		}
+
+		function userLogout()
+		{
+			if(confirm('Click OK to Logout'))
+	    	{
+	    		// Remove Cookie
+	    		document.cookie = "grav_issues_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC";
+	    		window.open('/', '_top');
+	    	}
 		}
 
 		function openIssue()
@@ -1544,7 +1813,7 @@ class GRAVITATE_ISSUE_TRACKER {
 			var pace = 3;
 			var stop = 112;
 			var current = 28;
-		    $('frameset').attr('rows', 80 + ',*');
+		    $('frameset').attr('rows', 120 + ',*');
 		}
 
 		function openViewIssues()
@@ -1557,7 +1826,7 @@ class GRAVITATE_ISSUE_TRACKER {
 			var pace = 3;
 			var stop = 112;
 			var current = 28;
-		    $('frameset').attr('rows', 28 + ',*');
+		    $('frameset').attr('rows', 34 + ',*');
 		}
 
 		var gravWindowControls;
@@ -1571,13 +1840,15 @@ class GRAVITATE_ISSUE_TRACKER {
 		</script>
 		</head>
 		<frameset rows="28,*" border="4">
-		  <frame name="windowControls" src="?gissues_controls=1" scrolling="no" frameborder="6" bordercolor="#333333" />
+		  <frame name="windowControls" src="?<?php echo (!empty($_GET['gravqatracker']) ? 'gravqatracker='.$_GET['gravqatracker'].'&' : '');?>gissues_controls=1" scrolling="no" frameborder="6" bordercolor="#333333" />
 		  <frame name="windowMain" src="<?php echo 'http://'.$_SERVER['HTTP_HOST'];?>" frameborder="0" onload="frameLoaded();" />
 		</frameset>
 		</html>
 		<?php
 	}
 }
+
+//echo '<pre>';print_r($_POST);echo '</pre>';
 
 add_action( 'wp_ajax_save_issues', array('GRAVITATE_ISSUE_TRACKER', 'save_issues'));
 
