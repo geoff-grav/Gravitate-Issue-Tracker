@@ -705,6 +705,8 @@ class GRAVITATE_ISSUE_TRACKER {
 		<div id="grid-container"></div>
 		<script>
 
+		var current_page = parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search;
+
 		var grid;
 
 		parent.openViewIssues();
@@ -714,6 +716,9 @@ class GRAVITATE_ISSUE_TRACKER {
 		jQuery(document).ready(function() {
 
 			$('button#cancel_views').on('click', function(){
+				if(current_page != parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search){
+					parent.gravWindowMain.location = current_page;
+				}
 		        parent.closeIssue();
 		        window.open('?<?php echo (!empty($_GET['gravqatracker']) ? 'gravqatracker='.$_GET['gravqatracker'].'&' : '');?>gissues_controls=1', '_self');
 		    });
@@ -1512,6 +1517,8 @@ class GRAVITATE_ISSUE_TRACKER {
 		                        parent.closeIssue();
 		                        $('#controls').hide();
 		                        $('#issue-container').fadeIn();
+		                        $('#cancelCapture').hide();
+								$('#issue').show();
 		                        closeScreenshot();
 		                        parent.gravWindowMain.document.body.removeChild(parent.gravWindowMain.document.getElementById('captureLoadingDiv'));
 		                    }
