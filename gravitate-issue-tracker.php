@@ -29,6 +29,8 @@ class GRAVITATE_ISSUE_TRACKER {
 	private static $user = false;
 	private static $access = false;
 
+	private static $settings;
+
 	static function activate()
 	{
 		if(!get_option(self::$option_key))
@@ -47,9 +49,31 @@ class GRAVITATE_ISSUE_TRACKER {
 		}
 	}
 
+	static function set_settings()
+	{
+		self::$settings = get_option(self::$option_key);
+
+		$selects = array('status', 'priorities', 'departments');
+
+	    foreach ($selects as $select)
+	    {
+	    	if(!empty(self::$settings[$select]))
+		    {
+		    	$items = self::$settings[$select];
+		    	self::$settings[$select] = array();
+			    foreach (explode("\n", str_replace("\r", '', $items)) as $key => $value)
+			    {
+			    	$color = trim(strpos($value, ':') ? substr($value, (strpos($value, ':')+1)) : '');
+			    	$value = trim(strpos($value, ':') ? substr($value, 0, strpos($value, ':')) : $value);
+			    	self::$settings[$select][] = array('value' => $value, 'color' => $color);
+			    }
+			}
+	    }
+	}
+
 	static function init()
 	{
-		$settings = get_option(self::$option_key);
+		self::set_settings();
 
 		self::$uri = str_replace('?'.$_SERVER['QUERY_STRING'], '', $_SERVER['REQUEST_URI']);
 		self::$uri.= (!empty($_GET['gravqatracker']) ? '?gravqatracker='.$_GET['gravqatracker'].'&' : '?');
@@ -60,31 +84,31 @@ class GRAVITATE_ISSUE_TRACKER {
 			setcookie("grav_issues_user", $_COOKIE['grav_issues_user']     , time()+3600, "/");
 		}
 
-		if((!empty($settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['full_static_url']) !== false) || (!empty($settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['limited_static_url']) !== false) || (!empty($_GET['gravqatracker'])))
+		if((!empty(self::$settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['full_static_url']) !== false) || (!empty(self::$settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['limited_static_url']) !== false) || (!empty($_GET['gravqatracker'])))
 		{
 			$url_type = 'static';
 			if(!empty($_GET['gravqatracker']))
 			{
-				if($_GET['gravqatracker'] == $settings['hash_full_url'])
+				if($_GET['gravqatracker'] == self::$settings['hash_full_url'])
 				{
 					self::$access = 'full';
 				}
-				else if($_GET['gravqatracker'] == $settings['hash_limited_url'])
+				else if($_GET['gravqatracker'] == self::$settings['hash_limited_url'])
 				{
 					self::$access = 'limited';
 				}
 				$url_type = 'hash';
 			}
-			else if(!empty($settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['full_static_url']) !== false)
+			else if(!empty(self::$settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['full_static_url']) !== false)
 			{
 				self::$access = 'full';
 			}
-			else if(!empty($settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], $settings['limited_static_url']) !== false)
+			else if(!empty(self::$settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['limited_static_url']) !== false)
 			{
 				self::$access = 'limited';
 			}
 
-			$ips = array_map('trim', explode(',',$settings['ips']));
+			$ips = array_map('trim', explode(',',self::$settings['ips']));
 			$ips[] = '127.0.0.1';
 
 			$is_ip_allowed = false;
@@ -120,6 +144,16 @@ class GRAVITATE_ISSUE_TRACKER {
 					define('DOING_AJAX', true);
 				}
 				self::update_data($_POST['issue_id'], $_POST['issue_key'], $_POST['issue_value']);
+				exit;
+			}
+
+			if(!empty($_POST['multi_select']))
+			{
+				if(!defined('DOING_AJAX'))
+				{
+					define('DOING_AJAX', true);
+				}
+				self::multi_select($_POST['ids'], $_POST['action']);
 				exit;
 			}
 
@@ -206,26 +240,6 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	private static function get_current_page_issues($url)
 	{
-
-		$settings = get_option(self::$option_key);
-
-        $selects = array('status');
-
-	    foreach ($selects as $select)
-	    {
-	    	if(!empty($settings[$select]))
-		    {
-		    	$items = $settings[$select];
-		    	$settings[$select] = array();
-			    foreach (explode("\n", str_replace("\r", '', $items)) as $key => $value)
-			    {
-			    	$color = trim(strpos($value, ':') ? substr($value, (strpos($value, ':')+1)) : '');
-			    	$value = trim(strpos($value, ':') ? substr($value, 0, strpos($value, ':')) : $value);
-			    	$settings[$select][] = array('value' => $value, 'color' => $color);
-			    }
-			}
-	    }
-
 		$issues = get_posts(array('post_type' => 'gravitate_issue', 'post_status' => 'draft', 'posts_per_page' => -1));
 		$items = array();
 	    if($issues)
@@ -243,9 +257,9 @@ class GRAVITATE_ISSUE_TRACKER {
 		            $status = '';
 		            $color = '';
 
-		            if(!empty($settings['status']))
+		            if(!empty(self::$settings['status']))
 		            {
-		            	foreach($settings['status'] as $k => $v)
+		            	foreach(self::$settings['status'] as $k => $v)
 		            	{
 		          			if($data['status'] == sanitize_title($v['value']))
 		          			{
@@ -326,6 +340,74 @@ class GRAVITATE_ISSUE_TRACKER {
 			    	}
 		    	}
 		    }
+		}
+
+	    echo 'Error';
+		exit;
+	}
+
+	private static function multi_select($ids='', $action='')
+	{
+		$success = false;
+
+		if(self::$access === 'full')
+		{
+			$ids = explode(',', $ids);
+			// Delete Issue
+		    if(!empty($ids))
+		    {
+		    	foreach ($ids as $id)
+		    	{
+		    		if($action == 'delete')
+		    		{
+		    			if($issue = get_post($id))
+				    	{
+				    		if(delete_post_meta($issue->ID, 'gravitate_issue_data'))
+				    		{
+					    		if(wp_delete_post($issue->ID, true))
+					    		{
+					    			$success = true;
+					    		}
+					    	}
+				    	}
+		    		}
+		    		else
+		    		{
+			    		if(strpos($action, ':'))
+			    		{
+			    			$action = explode(':', $action);
+			    			$key = $action[0];
+			    			$value = $action[1];
+			    		}
+			    		else
+			    		{
+			    			$key = 'location';
+			    			$value = $action;
+			    		}
+
+		    			if($issue = get_post($id))
+				    	{
+				    		if($data = get_post_meta($issue->ID, 'gravitate_issue_data', true))
+				    		{
+				    			$data[$key] = $value;
+
+					    		if(update_post_meta($issue->ID, 'gravitate_issue_data', $data))
+	    						{
+	    							$success = true;
+	    						}
+					    	}
+
+					    	self::save_log($issue->ID, self::$user['name'], 'Moved Issue to: '.ucwords($value));
+				    	}
+				    }
+		    	}
+		    }
+		}
+
+		if($success)
+		{
+			echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
+			exit;
 		}
 
 	    echo 'Error';
@@ -428,6 +510,7 @@ class GRAVITATE_ISSUE_TRACKER {
 			if($post_id = wp_insert_post( $args ))
 			{
 				$postdata = array();
+				$postdata['location'] = 'active';
 				$postdata['description'] = esc_sql($_POST['description']);
 				$postdata['status'] = esc_sql((!empty($_POST['status']) ? $_POST['status'] : 2));
 				$postdata['priority'] = esc_sql($_POST['priority']);
@@ -472,9 +555,6 @@ class GRAVITATE_ISSUE_TRACKER {
 	{
 		if(!empty($_GET['page']) && $_GET['page'] == 'gravitate_issue_tracker')
 		{
-
-			$settings = array();
-
 			$fields = array();
 			$fields['full_static_url'] = array('type' => 'text', 'label' => 'Full Access URL', 'value' => 'qatrackeradmin', 'description' => 'Users must be logged in or coming from the Allowed IPs to access this.');
 			$fields['limited_static_url'] = array('type' => 'text', 'label' => 'Limited Access URL', 'value' => 'qatracker', 'description' => 'Users must be logged in or coming from the Allowed IPs to access this.');
@@ -508,13 +588,13 @@ class GRAVITATE_ISSUE_TRACKER {
 					{
 						$success = 'Settings Saved Successfully';
 					}
+
+					self::set_settings();
 				}
 
-				$settings = get_option(self::$option_key);
-
-				if(!empty($settings))
+				if(!empty(self::$settings))
 				{
-					foreach ($settings as $key => $value)
+					foreach (self::$settings as $key => $value)
 					{
 						if(isset($fields[$key]))
 						{
@@ -537,11 +617,11 @@ class GRAVITATE_ISSUE_TRACKER {
 							<table class="form-table">
 							<tr>
 								<th><label>Full User Access</label></th>
-								<td><a target="_blank" href="<?php echo site_url().'/?gravqatracker='.$settings['hash_full_url'];?>"><?php echo site_url().'/?gravqatracker='.$settings['hash_full_url'];?></a></td>
+								<td><a target="_blank" href="<?php echo site_url().'/?gravqatracker='.self::$settings['hash_full_url'];?>"><?php echo site_url().'/?gravqatracker='.self::$settings['hash_full_url'];?></a></td>
 							</tr>
 							<tr>
 								<th><label>Limited User Access</label></th>
-								<td><a target="_blank" href="<?php echo site_url().'/?gravqatracker='.$settings['hash_limited_url'];?>"><?php echo site_url().'/?gravqatracker='.$settings['hash_limited_url'];?></a></td>
+								<td><a target="_blank" href="<?php echo site_url().'/?gravqatracker='.self::$settings['hash_limited_url'];?>"><?php echo site_url().'/?gravqatracker='.self::$settings['hash_limited_url'];?></a></td>
 							</tr>
 							<?php
 							foreach($fields as $meta_key => $field)
@@ -678,9 +758,6 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	static function view_issues()
 	{
-
-		$settings = get_option(self::$option_key);
-
 		?>
 		<!doctype html>
 		<html lang="en-US">
@@ -702,7 +779,35 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		</head>
 		<body id="view-issues">
-		<div id="view_header"><button id="cancel_views" onclick="">< Back</button> <a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a> <input placeholder="Filter..." id="search" type="text"> </div>
+		<div id="view_header">
+			<button id="cancel_views" onclick="">< Back</button>
+			<select id="location" name="location">
+				<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'active' ? true : false);?> value="active">Active</option>
+				<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'archive' ? true : false);?> value="archive">Archived</option>
+				<?php if(self::$access == 'full'){ ?>
+					<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'trash' ? true : false);?> value="trash">Trashed</option>
+				<?php } ?>
+			</select>
+			<?php if(self::$access == 'full'){ ?>
+			<select id="with-selected" name="with_selected">
+				<option value="">- With Selected -</option>
+				<?php if(!empty($_GET['location']) && ($_GET['location'] == 'archive' || $_GET['location'] == 'trash')) { ?>
+					<option value="active">Move to Active</option>
+				<?php } ?>
+				<?php if(empty($_GET['location']) || (!empty($_GET['location']) && $_GET['location'] != 'archive')) { ?>
+					<option value="archive">Move to Archive</option>
+				<?php } ?>
+				<?php if(!empty($_GET['location']) && $_GET['location'] == 'trash') { ?>
+					<option value="delete">Delete</option>
+				<?php }else{ ?>
+					<option value="trash">Trash</option>
+				<?php } ?>
+				<!-- <option value="status:resolve">Mark as RESOLVED</option> -->
+			</select>
+			<?php } ?>
+			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
+			<input placeholder="Filter..." id="search" type="text">
+		</div>
 		<div id="grid-container"></div>
 		<script>
 
@@ -716,12 +821,16 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		jQuery(document).ready(function() {
 
+			$('#location').on('change', function(e){
+				window.open('<?php echo self::$uri;?>view_issues=true&location='+$(this).val(), '_self');
+			});
+
 			$('button#cancel_views').on('click', function(){
 				if(current_page != parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search){
 					parent.gravWindowMain.location = current_page;
 				}
 		        parent.closeIssue();
-		        window.open('?<?php echo (!empty($_GET['gravqatracker']) ? 'gravqatracker='.$_GET['gravqatracker'].'&' : '');?>gissues_controls=1', '_self');
+		        window.open('<?php echo self::$uri;?>gissues_controls=1', '_self');
 		    });
 
 		    $('#search').on('keyup', function()
@@ -771,9 +880,68 @@ class GRAVITATE_ISSUE_TRACKER {
 		    	parent.userLogout();
 		    });
 
+		    $('#with-selected').on('change', function(e)
+		    {
+		    	if($(this).val())
+		    	{
+		    		if(confirm('Are you sure?'))
+		    		{
+			    		var issue_action = $(this).val();
+				    	var issue_ids = [];
+				    	$('.checkbox-label input').each(function(){
+				    		if($(this).is(':checked'))
+				    		{
+				    			issue_ids.push($(this).val());
+				    		}
+				    	});
+
+				    	if(issue_ids.length)
+				    	{
+				    		$('body').addClass('loading');
+
+				    		$.post('<?php echo self::$uri;?>', {
+				                multi_select: true,
+				                ids: issue_ids.join(','),
+				                action: issue_action,
+				            },
+				            function(response)
+				            {
+				                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
+				                {
+				                	if(issue_action == 'archive' || issue_action == 'trash' || issue_action == 'active' || issue_action == 'delete')
+				                	{
+				                		var data = grid.getData();
+
+				                		console.log(data);
+
+				                		$('.checkbox-label input:checked').each(function(index)
+				                		{
+				                			data.splice(($(this).closest('.slick-row').index()-index), 1);
+											_original_grid_data.splice(($(this).closest('.slick-row').index()-index), 1);
+										});
+
+										grid.setData(data);
+										grid.render();
+										add_grid_listeners();
+				                	}
+				                }
+				                else
+				                {
+				                    // Error
+				                    alert('There was an error. Please try again or contact your Account Manager.');
+				                }
+				                $('body').removeClass('loading');
+				            });
+				    	}
+				    }
+
+				    $('#with-selected').val('');
+			    }
+		    });
+
 		    $(window).resize(function(){
 				var cols = grid.getColumns();
-			    cols[5].width = ($(window).width()-650);
+			    cols[<?php echo (self::$access == 'full' ? 6 : 5); ?>].width = ($(window).width()-<?php echo (self::$access == 'full' ? 708 : 670); ?>);
 			    grid.setColumns(cols);
 			    grid.resizeCanvas();
 				add_grid_listeners();
@@ -783,6 +951,9 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		function add_grid_listeners()
 	    {
+	    	$('.slick-cell.r<?php echo (self::$access == 'full' ? 1 : 0); ?>').css('line-height', '35px');
+			$('.slick-cell.r<?php echo (self::$access == 'full' ? 1 : 0); ?>').css('text-align', 'center');
+
 	    	$('select').each(function(){
 	    		$(this).css('color', $(this).find(":selected").attr('data-color'));
 	    	});
@@ -793,47 +964,71 @@ class GRAVITATE_ISSUE_TRACKER {
 				$('select.department').parent().css('position', 'relative').append('<span class="cover" onclick="alert(\'You do not have permission to edit this.\')"></span>');
 			}
 
-		    $('.update_data').on('change', function(){
-
-		    	$(this).css('color', $(this).find(":selected").attr('data-color'));
-
-		    	$('body').addClass('loading');
-		    	var html = $(this).parent().parent().html().split('selected="selected"').join('');
-		    	html = html.split('value="'+$(this).val()+'"').join('value="'+$(this).val()+'" selected="selected"');
+		    $('.update_data').on('change', function()
+		    {
+		    	var type = $(this).attr('type');
+		    	var html;
 
 		    	var data = grid.getData();
                 var active = grid.getActiveCell();
                 var cols = grid.getColumns();
 
-		        $.post( '<?php echo self::$uri;?>', {
-	                update_data: true,
-	                issue_id: data[active.row].id.split('<p>').join('').split('</p>').join(''),
-	                issue_key: $(this).attr('id'),
-	                issue_value: $(this).val(),
-	            },
-	            function(response)
-	            {
-	                //alert(response);
-	                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
-	                {
-	                    //
+		    	if(type == 'checkbox')
+		    	{
+		    		html = $(this).parent().parent().html();
 
-	                    data[active.row][cols[active.cell].id] = html.split(" selected='selected'").join('');
-	                    grid.setData(data);
-	                    grid.render();
+		    		if($(this).is(':checked'))
+		    		{
+		    			html = html.split('value="'+$(this).val()+'"').join('value="'+$(this).val()+'" checked="checked"');
+		    		}
+		    		else
+		    		{
+		    			html = html.split('checked="checked"').join('');
+		    		}
 
-	                    add_grid_listeners();
+		    		//alert(html);
 
-	                    $('body').removeClass('loading');
-	                }
-	                else
-	                {
-	                	$('body').removeClass('loading');
+		    		data[active.row][cols[active.cell].id] = html;
+                    grid.setData(data);
+                    grid.render();
 
-	                    // Error
-	                    alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
-	                }
-	            });
+                    add_grid_listeners();
+		    	}
+		    	else
+		    	{
+		    		$(this).css('color', $(this).find(":selected").attr('data-color'));
+		    		$('body').addClass('loading');
+		    		html = $(this).parent().parent().html().split('selected="selected"').join('');
+		    		html = html.split('value="'+$(this).val()+'"').join('value="'+$(this).val()+'" selected="selected"');
+
+		    		$.post('<?php echo self::$uri;?>', {
+		                update_data: true,
+		                issue_id: data[active.row].id.split('<p>').join('').split('</p>').join(''),
+		                issue_key: $(this).attr('id'),
+		                issue_value: $(this).val(),
+		            },
+		            function(response)
+		            {
+		                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
+		                {
+		                    data[active.row][cols[active.cell].id] = html.split(" selected='selected'").join('');
+		                    grid.setData(data);
+		                    grid.render();
+
+		                    add_grid_listeners();
+
+		                    $('body').removeClass('loading');
+		                }
+		                else
+		                {
+		                	$('body').removeClass('loading');
+
+		                    // Error
+		                    alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
+		                }
+		            });
+		    	}
+
 		    });
 
 			$('a.comments').on('click', function(){
@@ -892,14 +1087,15 @@ class GRAVITATE_ISSUE_TRACKER {
 		    return sortdir * (x === y ? 0 : (x > y ? 1 : -1));
 		}
 
-		  var data = [],
+		  var data = [], raw_data,
 		      columns = [
+		          <?php if(self::$access == 'full'){ ?>{ id: "checkbox", name: "&nbsp;", field: "checkbox", width: 40, sortable: false},<?php } ?>
 		          { id: "id", name: "#", field: "id", width: 40, sortable: true, sorter: sorterNumeric },
 		          { id: "status", name: "Status", field: "status", width: 150, sortable: true, sorter: sorterStringCompare },
 		          { id: "department", name: "Department", field: "department", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "priority", name: "Priority", field: "priority", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "created_by", name: "Created By", field: "created_by", width: 110, sortable: true, sorter: sorterStringCompare },
-		          { id: "description", name: "Description", field: "description", width: ($(window).width()-650), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
+		          { id: "description", name: "Description", field: "description", width: ($(window).width()-<?php echo (self::$access == 'full' ? 708 : 670); ?>), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
 		          //{ id: "url", name: "URL", field: "url", width: 60, sortable: true, sorter: sorterStringCompare },
 		          //{ id: "screenshot", name: "Screenshot", field: "screenshot", width: 120, sortable: true, sorter: sorterStringCompare }
 		          { id: "info", name: "Info", field: "info", width: 130, sortable: true, sorter: sorterStringCompare }
@@ -918,23 +1114,6 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		    <?php
 
-		    $selects = array('status', 'priorities', 'departments');
-
-		    foreach ($selects as $select)
-		    {
-		    	if(!empty($settings[$select]))
-			    {
-			    	$items = $settings[$select];
-			    	$settings[$select] = array();
-				    foreach (explode("\n", str_replace("\r", '', $items)) as $key => $value)
-				    {
-				    	$color = trim(strpos($value, ':') ? substr($value, (strpos($value, ':')+1)) : '');
-				    	$value = trim(strpos($value, ':') ? substr($value, 0, strpos($value, ':')) : $value);
-				    	$settings[$select][] = array('value' => $value, 'color' => $color);
-				    }
-				}
-		    }
-
 		    $issues = get_posts(array('post_type' => 'gravitate_issue', 'post_status' => 'draft', 'posts_per_page' => -1));
 
 		    if($issues)
@@ -943,41 +1122,41 @@ class GRAVITATE_ISSUE_TRACKER {
 		        foreach($issues as $issue)
 		        {
 		        	$data = get_post_meta( $issue->ID, 'gravitate_issue_data', 1);
-		            $description = str_replace('"','', $data['description']);
-		            $description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
 
-		            $args = array();
-					$args['post_parent'] = $issue->ID;
-					$args['post_type'] = 'gravitate_issue_com';
-					$args['post_status'] = 'draft';
+		        	if(((empty($_GET['location']) || $_GET['location'] == 'active') && (empty($data['location']) || $data['location'] == 'active')) || (!empty($_GET['location']) && !empty($data['location']) && $data['location'] == $_GET['location']))
+		        	{
+			            $description = str_replace('"','', $data['description']);
+			            $description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
 
-					$comments = get_posts($args);
+			            $args = array();
+						$args['post_parent'] = $issue->ID;
+						$args['post_type'] = 'gravitate_issue_com';
+						$args['post_status'] = 'draft';
 
-		            ?>
+						$comments = get_posts($args);
 
-		            var inner_start = '<p>';
-		            data[<?php echo $num;?>] = {
-		                id: "<?php echo $issue->ID;?>",
-		                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
-		                description: inner_start+'<?php echo $description;?></p>',
-		                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="delete_issue(<?php echo $issue->ID;?>);"><i class="fa fa-close"></i></a></p>'
-		            };
+			            ?>
 
-		            _original_grid_data[<?php echo $num;?>] = {
-		                id: "<?php echo $issue->ID;?>",
-		                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty($settings['status'])){foreach($settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty($settings['departments'])){foreach($settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty($settings['priorities'])){foreach($settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-		                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
-		                description: inner_start+'<?php echo $description;?></p>',
-		                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="delete_issue(<?php echo $issue->ID;?>);"><i class="fa fa-close"></i></a></p>'
-		            };
+			            var inner_start = '<p>';
 
-		            <?php
-		            $num++;
+			            raw_data = {
+			                <?php if(self::$access == 'full'){ ?>checkbox: '<label class="checkbox-label"><input class="update_data" type="checkbox" name="id[\'<?php echo $issue->ID;?>\']" value="<?php echo $issue->ID;?>"></label>',<?php } ?>
+			                id: "<?php echo $issue->ID;?>",
+			                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty(self::$settings['status'])){foreach(self::$settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+			                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty(self::$settings['departments'])){foreach(self::$settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+			                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty(self::$settings['priorities'])){foreach(self::$settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+			                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
+			                description: inner_start+'<?php echo $description;?></p>',
+			                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="delete_issue(<?php echo $issue->ID;?>);"><i class="fa fa-close"></i></a></p>'
+			            };
+
+			            data[<?php echo $num;?>] = raw_data;
+
+			            _original_grid_data[<?php echo $num;?>] = raw_data;
+
+			            <?php
+			            $num++;
+			        }
 		        }
 		    }
 		    ?>
@@ -1086,7 +1265,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
 		<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
 		<script type='text/javascript'>
-			parent.openIssue();
+			parent.showProfile();
 		</script>
 		</head>
 		<body>
@@ -1115,8 +1294,6 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	static function controls()
 	{
-		$settings = get_option(self::$option_key);
-
 		?>
 		<!doctype html>
 		<html lang="en-US">
@@ -1391,6 +1568,18 @@ class GRAVITATE_ISSUE_TRACKER {
 				$('#cancelCapture').hide();
 				$('#issue').show();
 				closeScreenshot();
+			});
+
+			$('#priority').on('change', function()
+			{
+				if($(this).val())
+				{
+					$(this).css('color', '#000');
+				}
+				else
+				{
+					$(this).css('color', '#777');
+				}
 			});
 
 			jQuery(window).resize(function() {
@@ -1761,15 +1950,23 @@ class GRAVITATE_ISSUE_TRACKER {
 		<div id="controls">
 			<div class="left" style="width: 63%;">
 				<label>Description *</label><br>
-				<textarea id="description" placeholder="Description *" required></textarea>
+				<textarea id="description" required></textarea>
 				<br>
 		        <select id="priority" name="priority" required>
-		            <option value="urgent">URGENT</option>
-		            <option value="high">High</option>
-		            <option value="" selected="selected">- Priority * -</option>
-		            <option value="normal">Normal</option>
-		            <option value="low">Low</option>
-		            <option value="future_request">Future Request</option>
+		        <option value=""> - Priority * - </option>
+		        	<?php
+
+				    if(!empty(self::$settings['priorities']))
+		            {
+		            	foreach(self::$settings['priorities'] as $k => $v)
+		            	{
+		          			?>
+		          			<option value="<?php echo sanitize_title($v['value']);?>"><?php echo $v['value'];?></option>
+		          			<?php
+		          		}
+		          	}
+
+				    ?>
 		        </select>
 		        <input type="text" id="link" name="link" placeholder="(optional link)">
 		        <button id="sendCapture">Submit Issue</button>
@@ -1780,14 +1977,6 @@ class GRAVITATE_ISSUE_TRACKER {
 
 				</div>
 			</div>
-
-			<!-- <div id="right" class="right">
-				<span id="url"></span><br>
-				<script>document.write(navigator.sayswho);</script><br>
-				<script>document.write(jscd.os +' '+ jscd.osVersion);</script><br>
-				<span id="screenSize"></span> (<script>document.write(jscd.screen);</script>)<br>
-				<?php echo $_SERVER['REMOTE_ADDR'];?>
-			</div> -->
 		</div>
 		</body>
 		</html>
@@ -1826,6 +2015,11 @@ class GRAVITATE_ISSUE_TRACKER {
 			var stop = 112;
 			var current = 28;
 		    $('frameset').attr('rows', 120 + ',*');
+		}
+
+		function showProfile()
+		{
+		    $('frameset').attr('rows', 72 + ',*');
 		}
 
 		function openViewIssues()

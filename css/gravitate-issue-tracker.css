@@ -10,6 +10,8 @@ textarea {height: 40px; padding: 3px; }
 #sendCapture {margin-top: 3px; }
 #issue-container { text-align: center; padding: 6px 6px 0; }
 #controls { display: none; }
+#controls #priority { color: #777; }
+#controls #priority option { color: #000; }
 button {cursor: pointer; background-color: #ddd;border-radius: 6px;padding: 3px 9px;border: 1px solid;}
 #cancelCapture { background-color: #aaa; width:9%; display: none; }
 #cancelCapture, #issue { width: 120px; }
@@ -23,6 +25,8 @@ h2 { margin: 5px 0; }
 #current-issues { height: 75px; overflow: auto; }
 #current-issues a { white-space: nowrap; text-overflow: ellipsis; display: block; overflow: hidden; }
 #current-issues a span { display: inline-block; padding-right: 12px; }
+
+.checkbox-label { padding: 6px; display: block; }
 
 .cover {
 	display: block;
@@ -48,6 +52,9 @@ textarea {height: 34px; padding: 3px; }
 #controls { display: none; padding: 6px; margin-top: -18px; }
 #controls input, #controls textarea, #controls select { margin: 4px 0.2%; padding: 3px }
 #controls input, #controls select { width: 37%; }
+
+#location { width: 120px !important; }
+#with-selected { width: 160px !important; }
 
 button {cursor: pointer;}
 a { color: #cde; }
@@ -150,7 +157,7 @@ body.loading:after {
 	height: 100%;
 }
 
-.slick-cell.r5 {
+.slick-cell.r6 {
     white-space: normal;
 }
 
