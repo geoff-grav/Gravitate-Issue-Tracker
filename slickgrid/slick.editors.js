@@ -420,10 +420,10 @@
     this.init = function () {
       var $container = $("body");
 
-      $wrapper = $("<DIV class='slick-editor' style='width:"+$('.slick-cell.r5').width()+"px;z-index:10000;position:absolute;background:white;padding:5px;border:3px solid gray; -moz-border-radius:10px; border-radius:10px;'/>")
+      $wrapper = $("<DIV class='slick-editor' style='width:"+($('.slick-cell.r6').width()+9)+"px;z-index:10000;position:absolute;background:white;padding:5px;border:3px solid gray; -moz-border-radius:10px; border-radius:10px;'/>")
           .appendTo($container);
 
-      $input = $("<TEXTAREA hidefocus rows=5 style='backround:white;width:98%;height:80px;border:0;outline:0'>")
+      $input = $("<TEXTAREA hidefocus rows=5 style='backround:white;width:98%;border:0;outline:0'>")
           .appendTo($wrapper);
 
       $("<DIV style='text-align:right'><BUTTON>Save</BUTTON><BUTTON>Cancel</BUTTON></DIV>")

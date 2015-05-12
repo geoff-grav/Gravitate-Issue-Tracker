@@ -1100,45 +1100,64 @@ function LinearGradientContainer(imageData) {
     var hasDirection = imageData.args[0].match(this.stepRegExp) === null;
 
     if (hasDirection) {
-        imageData.args[0].split(" ").reverse().forEach(function(position) {
-            switch(position) {
-                case "left":
-                    this.x0 = 0;
-                    this.x1 = 1;
-                    break;
-                case "top":
-                    this.y0 = 0;
-                    this.y1 = 1;
-                    break;
-                case "right":
-                    this.x0 = 1;
-                    this.x1 = 0;
-                    break;
-                case "bottom":
-                    this.y0 = 1;
-                    this.y1 = 0;
-                    break;
-                case "to":
-                    var y0 = this.y0;
-                    var x0 = this.x0;
-                    this.y0 = this.y1;
-                    this.x0 = this.x1;
-                    this.x1 = x0;
-                    this.y1 = y0;
-                    break;
-            }
-        }, this);
+        if (imageData.args[0].indexOf('deg') != -1) { // Grav Updated
+          var rad = parseFloat(imageData.args[0].substr(0, imageData.args[0].length - 3)) * (Math.PI / 180); // Grav Updated
+          //Finds y start and scales it between 0 and 1 // Grav Updated
+          this.y0 = (Math.cos(rad) + 1) / 2; // Grav Updated
+          //Flips y1 // Grav Updated
+          this.y1 = 1 - this.y0; // Grav Updated
+          //Same as for y0 but flip axis to match with css gradient // Grav Updated
+          this.x0 = (-Math.sin(rad) + 1) / 2; // Grav Updated
+          this.x1 = 1 - this.x0; // Grav Updated
+        } else { // Grav Updated
+          imageData.args[0].split(" ").reverse().forEach(function(position) {
+            position = 'left';
+              switch(position) {
+                  case "left":
+                      this.x0 = 0;
+                      this.x1 = 1;
+                      break;
+                  case "top":
+                      this.y0 = 0;
+                      this.y1 = 1;
+                      break;
+                  case "right":
+                      this.x0 = 1;
+                      this.x1 = 0;
+                      break;
+                  case "bottom":
+                      this.y0 = 1;
+                      this.y1 = 0;
+                      break;
+                  case "to":
+                      var y0 = this.y0;
+                      var x0 = this.x0;
+                      this.y0 = this.y1;
+                      this.x0 = this.x1;
+                      this.x1 = x0;
+                      this.y1 = y0;
+                      break;
+              }
+          }, this);
+        }  // Grav Updated
     } else {
         this.y0 = 0;
         this.y1 = 1;
     }
 
     this.colorStops = imageData.args.slice(hasDirection ? 1 : 0).map(function(colorStop) {
-        var colorStopMatch = colorStop.match(this.stepRegExp);
-        return {
-            color: colorStopMatch[1],
-            stop: colorStopMatch[3] === "%" ? colorStopMatch[2] / 100 : null
-        };
+
+      colorStop = colorStop.split('transparent').join('rgba(0, 0, 0, 0.0)'); // Grav Updated
+
+        var colorStopMatch = colorStop.match(this.stepRegExp);  // Grav Updated
+
+        if(colorStopMatch !== null)
+        {
+          return {
+              color: colorStopMatch[1],
+              stop: colorStopMatch[3] === "%" ? colorStopMatch[2] / 100 : null
+          };
+        }
     }, this);
 
     if (this.colorStops[0].stop === null) {

@@ -1,10 +1,7 @@
 <?php
 
-/**
- * @package Gravitate Issue Tracker
- */
 /*
-Plugin Name: Gravitate Issue Tracker
+Plugin Name: Gravitate QA Tracker
 Plugin URI: http://www.gravitatedesign.com
 Description: This is Plugin allows you and your users to Track Website issues.
 Version: 1.0.0
@@ -19,10 +16,10 @@ if ( !function_exists( 'add_action' ) ) {
 	exit;
 }
 
-class GRAVITATE_ISSUE_TRACKER {
+class GRAVITATE_QA_TRACKER {
 
 	private static $version = '1.0.0';
-	private static $option_key = 'gravitate_issue_tracker_settings';
+	private static $option_key = 'gravitate_qa_tracker_settings';
 
 	private static $uri;
 
@@ -108,16 +105,22 @@ class GRAVITATE_ISSUE_TRACKER {
 				self::$access = 'limited';
 			}
 
-			$ips = array_map('trim', explode(',',self::$settings['ips']));
-			$ips[] = '127.0.0.1';
-
 			$is_ip_allowed = false;
+			$ips = array('127.0.0.1');
 
-			foreach ($ips as $ip)
+			if(!empty(self::$settings['ips']))
 			{
-				if(strpos(self::real_ip(), $ip) !== false)
+				$ips = array_merge($ips, array_map('trim', explode(',',self::$settings['ips'])));
+			}
+
+			if(!empty($ips))
+			{
+				foreach ($ips as $ip)
 				{
-					$is_ip_allowed = true;
+					if(strpos(self::real_ip(), $ip) !== false)
+					{
+						$is_ip_allowed = true;
+					}
 				}
 			}
 
@@ -371,25 +374,13 @@ class GRAVITATE_ISSUE_TRACKER {
 					    	}
 				    	}
 		    		}
-		    		else
+		    		else if($action == 'active' || $action == 'archive' || $action == 'trash')
 		    		{
-			    		if(strpos($action, ':'))
-			    		{
-			    			$action = explode(':', $action);
-			    			$key = $action[0];
-			    			$value = $action[1];
-			    		}
-			    		else
-			    		{
-			    			$key = 'location';
-			    			$value = $action;
-			    		}
-
 		    			if($issue = get_post($id))
 				    	{
 				    		if($data = get_post_meta($issue->ID, 'gravitate_issue_data', true))
 				    		{
-				    			$data[$key] = $value;
+				    			$data['location'] = $action;
 
 					    		if(update_post_meta($issue->ID, 'gravitate_issue_data', $data))
 	    						{
@@ -397,7 +388,7 @@ class GRAVITATE_ISSUE_TRACKER {
 	    						}
 					    	}
 
-					    	self::save_log($issue->ID, self::$user['name'], 'Moved Issue to: '.ucwords($value));
+					    	self::save_log($issue->ID, self::$user['name'], 'Moved Issue to: '.ucwords($action), true);
 				    	}
 				    }
 		    	}
@@ -454,7 +445,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		return wp_insert_post($args);
 	}
 
-	private static function save_log($issue_id, $user, $log)
+	private static function save_log($issue_id, $user, $log, $silent=false)
 	{
 		// Save Data to Database
 	    $args = array(
@@ -468,8 +459,11 @@ class GRAVITATE_ISSUE_TRACKER {
 
 		if($post_id = wp_insert_post( $args ))
 		{
-			echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
-			exit;
+			if(!$silent)
+			{
+				echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
+				exit;
+			}
 		}
 	}
 
@@ -542,7 +536,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	static function admin_menu()
 	{
-		add_submenu_page( 'options-general.php', 'Gravitate Issues', 'Gravitate Issues', 'manage_options', 'gravitate_issue_tracker', array( __CLASS__, 'settings' ));
+		add_submenu_page( 'options-general.php', 'Gravitate QA Tracker', 'Gravitate QA Tracker', 'manage_options', 'gravitate_qa_tracker', array( __CLASS__, 'settings' ));
 	}
 
 	static function enqueue_scripts()
@@ -553,7 +547,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 	static function settings()
 	{
-		if(!empty($_GET['page']) && $_GET['page'] == 'gravitate_issue_tracker')
+		if(!empty($_GET['page']) && $_GET['page'] == 'gravitate_qa_tracker')
 		{
 			$fields = array();
 			$fields['full_static_url'] = array('type' => 'text', 'label' => 'Full Access URL', 'value' => 'qatrackeradmin', 'description' => 'Users must be logged in or coming from the Allowed IPs to access this.');
@@ -570,7 +564,7 @@ class GRAVITATE_ISSUE_TRACKER {
 			{
 				?>
 					<div class="wrap">
-					<h2>Gravitate Issue Tracker</h2>
+					<h2>Gravitate QA Tracker</h2>
 					<h4 style="margin: 6px 0;">Version <?php echo self::$version;?></h4>
 					<?php if($error){?><div class="error"><p><?php echo $error; ?></p></div><?php } ?>
 					</div>
@@ -605,7 +599,7 @@ class GRAVITATE_ISSUE_TRACKER {
 
 				?>
 					<div class="wrap">
-						<h2>Gravitate Issue Tracker</h2>
+						<h2>Gravitate QA Tracker</h2>
 						<h4 style="margin: 6px 0;">Version <?php echo self::$version;?></h4>
 
 						<?php if(!empty($success)){?><div class="updated"><p><?php echo $success; ?></p></div><?php } ?>
@@ -888,6 +882,7 @@ class GRAVITATE_ISSUE_TRACKER {
 		    		{
 			    		var issue_action = $(this).val();
 				    	var issue_ids = [];
+
 				    	$('.checkbox-label input').each(function(){
 				    		if($(this).is(':checked'))
 				    		{
@@ -1147,7 +1142,7 @@ class GRAVITATE_ISSUE_TRACKER {
 			                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty(self::$settings['priorities'])){foreach(self::$settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 			                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
 			                description: inner_start+'<?php echo $description;?></p>',
-			                info: inner_start+'<a class="btn" target="windowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-link"></i></a><a class="btn" target="windowMain" href="<?php echo $data['screenshot'];?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a><a class="btn" target="windowMain" title="Delete" onclick="delete_issue(<?php echo $issue->ID;?>);"><i class="fa fa-close"></i></a></p>'
+			                info: inner_start+'<a class="btn" target="GravSupportWindowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-file-o"></i></a><a class="btn external_link<?php if(empty($data['link'])){ ?> inactive<?php } ?>" <?php if(!empty($data['link'])){ ?>target="_blank" <?php } ?>title="<?php echo $data['link'];?>"<?php if(!empty($data['link'])){ ?> href="<?php echo $data['link'];?>"<?php } ?>><i class="fa fa-link"></i></a><a class="btn" target="GravSupportWindowMain" href="<?php echo str_replace(array('http:', 'https:'), '', $data['screenshot']);?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a></p>'
 			            };
 
 			            data[<?php echo $num;?>] = raw_data;
@@ -1582,6 +1577,22 @@ class GRAVITATE_ISSUE_TRACKER {
 				}
 			});
 
+			$('.change-url-link').on('click', function(e)
+			{
+				$('#change-url-form').toggleClass('open');
+				if($('#change-url-form').hasClass('open'))
+				{
+					$('.change-url').focus();
+				}
+			});
+
+			$('#change-url-form').on('submit', function(e)
+			{
+				e.preventDefault();
+				parent.gravWindowMain.location.href = $('.change-url').val();
+				return false;
+			});
+
 			jQuery(window).resize(function() {
 
 		         jQuery('#screenSize').html(jQuery(window).width());
@@ -1670,13 +1681,12 @@ class GRAVITATE_ISSUE_TRACKER {
 		    div.style.bottom = '0';
 		    div.style.left = '0';
 		    div.style.right = '0';
-		    div.style.background = "#333333 url('http://scripts.dev.gravitatedesign.com/loading.gif') no-repeat center center";
+		    div.style.background = "#333333 url('<?php echo plugins_url( 'loading.gif', __FILE__ );?>') no-repeat center center";
 		    div.style.backgroundSize = '10%';
 		    div.style.opacity = '0.7';
 		    div.style.zIndex = '1000000000';
 		    parent.gravWindowMain.document.body.appendChild(div);
 		    //alert(1);
-
 
 		    parent.gravWindowMain.html2canvas(parent.gravWindowMain.document.body, {
 		        onrendered: function(_canvas) {
@@ -1945,6 +1955,10 @@ class GRAVITATE_ISSUE_TRACKER {
 		<body>
 		<div id="issue-container">
 			<button id="cancelCapture">Cancel</button><button id="issue">Submit Issue</button> &nbsp; &nbsp; <button id="view_issues">View Issues</button>
+			<a class="change-url-link"><i class="fa fa-globe"></i></a>
+			<form id="change-url-form">
+				<input class="change-url" type="text" name="change_url" placeholder="http://">
+			</form>
 			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
 		</div>
 		<div id="controls">
@@ -1997,6 +2011,21 @@ class GRAVITATE_ISSUE_TRACKER {
 		{
 			//jQuery(gravWindowControls.update_current_issues());
 			gravWindowMain.document.onkeydown = gravWindowControls.KeyPress;
+
+			if(gravWindowMain.windowMain)
+			{
+				gravWindowMain = gravWindowMain.windowMain;
+
+				// var head = gravWindowMain.document.getElementsByTagName('head')[0];
+			 //    var script = gravWindowMain.document.createElement('script');
+			 //    script.type = 'text/javascript';
+			 //    script.src = "<?php echo plugins_url( 'js/html2canvas_0.5.0.js', __FILE__ );?>";
+			 //    head.appendChild(script);
+			}
+			else
+			{
+				gravWindowMain = GravSupportWindowMain;
+			}
 		}
 
 		function userLogout()
@@ -2039,27 +2068,33 @@ class GRAVITATE_ISSUE_TRACKER {
 		var gravWindowMain;
 
 		jQuery(document).ready(function() {
-			gravWindowControls = windowControls;
-			gravWindowMain = windowMain;
+			gravWindowControls = GravSupportWindowControls;
+			gravWindowMain = GravSupportWindowMain;
 		});
 
 		</script>
 		</head>
+
 		<frameset rows="28,*" border="4">
-		  <frame name="windowControls" src="?<?php echo (!empty($_GET['gravqatracker']) ? 'gravqatracker='.$_GET['gravqatracker'].'&' : '');?>gissues_controls=1" scrolling="no" frameborder="6" bordercolor="#333333" />
-		  <frame name="windowMain" src="<?php echo 'http://'.$_SERVER['HTTP_HOST'];?>" frameborder="0" onload="frameLoaded();" />
+		  <frame name="GravSupportWindowControls" src="?<?php echo (!empty($_GET['gravqatracker']) ? 'gravqatracker='.$_GET['gravqatracker'].'&' : '');?>gissues_controls=1" scrolling="no" frameborder="6" bordercolor="#333333" />
+		  <frame name="GravSupportWindowMain" src="<?php echo ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? 'https://' : 'http://').$_SERVER['HTTP_HOST'];?>" frameborder="0" onload="frameLoaded();" />
 		</frameset>
 		</html>
 		<?php
 	}
+
+	public static function plugin_settings_link($links) {
+	  $settings_link = '<a href="options-general.php?page=gravitate_qa_tracker">Settings</a>';
+	  array_unshift($links, $settings_link);
+	  return $links;
+	}
 }
 
-//echo '<pre>';print_r($_POST);echo '</pre>';
+add_action( 'wp_ajax_save_issues', array('GRAVITATE_QA_TRACKER', 'save_issues'));
 
-add_action( 'wp_ajax_save_issues', array('GRAVITATE_ISSUE_TRACKER', 'save_issues'));
-
-register_activation_hook( __FILE__, array( 'GRAVITATE_ISSUE_TRACKER', 'activate' ));
-add_action('admin_menu', array( 'GRAVITATE_ISSUE_TRACKER', 'admin_menu' ));
-add_action('init', array( 'GRAVITATE_ISSUE_TRACKER', 'init' ));
-add_action( 'wp_enqueue_scripts', array( 'GRAVITATE_ISSUE_TRACKER', 'enqueue_scripts' ));
-add_action( 'admin_enqueue_scripts', array( 'GRAVITATE_ISSUE_TRACKER', 'enqueue_scripts' ));
+register_activation_hook( __FILE__, array( 'GRAVITATE_QA_TRACKER', 'activate' ));
+add_action('admin_menu', array( 'GRAVITATE_QA_TRACKER', 'admin_menu' ));
+add_action('init', array( 'GRAVITATE_QA_TRACKER', 'init' ));
+add_action('wp_enqueue_scripts', array( 'GRAVITATE_QA_TRACKER', 'enqueue_scripts' ));
+add_action('admin_enqueue_scripts', array( 'GRAVITATE_QA_TRACKER', 'enqueue_scripts' ));
+add_filter('plugin_action_links_'.plugin_basename(__FILE__), array( 'GRAVITATE_QA_TRACKER', 'plugin_settings_link' ));
