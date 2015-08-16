@@ -7,8 +7,8 @@ Description: This is Plugin allows you and your users to Track Website issues.
 Version: 1.0.0
 */
 
-ini_set('error_reporting', E_ALL);
-ini_set('display_errors', 1);
+// ini_set('error_reporting', E_ALL);
+// ini_set('display_errors', 1);
 
 // Make sure we don't expose any info if called directly
 if ( !function_exists( 'add_action' ) ) {
@@ -303,13 +303,6 @@ class GRAVITATE_QA_TRACKER {
 	    {
 	    	$meta_value[$key] = $value;
 
-	    	$current_user = self::get_user_name();
-
-	    	if($key == 'status' && $value == 1 && $current_user)
-	    	{
-	    		$meta_value['completed_by'] = $current_user;
-	    	}
-
 	    	if(update_post_meta($post_id, 'gravitate_issue_data', $meta_value))
 	    	{
 	    		echo '--GRAVITATE_ISSUE_AJAX_SUCCESSFULLY--';
@@ -405,31 +398,6 @@ class GRAVITATE_QA_TRACKER {
 		exit;
 	}
 
-	private static function get_user_name()
-	{
-		$current_user = wp_get_current_user();
-
-		if($current_user->user_login)
-		{
-			if($current_user->user_firstname && $current_user->user_lastname)
-			{
-				$current_user = $current_user->user_firstname.' '.$current_user->user_lastname;
-			}
-			else if($current_user->display_name)
-			{
-				$current_user = $current_user->display_name;
-			}
-			else
-			{
-				$current_user = $current_user->user_login;
-			}
-
-			return $current_user;
-		}
-
-		return false;
-	}
-
 	private static function save_comment()
 	{
 		// Save Data to Database
@@ -469,9 +437,7 @@ class GRAVITATE_QA_TRACKER {
 
 	private static function save_issue()
 	{
-		$current_user = self::get_user_name();
-
-		if($current_user)
+		if(!empty(self::$user['name']))
 		{
 			// Create Image
 		    if(!empty($_POST['screenshot_data']))
@@ -592,7 +558,22 @@ class GRAVITATE_QA_TRACKER {
 					{
 						if(isset($fields[$key]))
 						{
-							$fields[$key]['value'] = $value;
+							if(is_array($value))
+							{
+								$new_val = '';
+								foreach ($value as $val)
+								{
+									if(isset($val['color']))
+									{
+										$new_val.= $val['value'].' : '. $val['color']."\n";
+									}
+								}
+								$fields[$key]['value'] = $new_val;
+							}
+							else
+							{
+								$fields[$key]['value'] = $value;
+							}
 						}
 					}
 				}
@@ -1514,21 +1495,16 @@ class GRAVITATE_QA_TRACKER {
 			});
 
 			$('button#issue').on('click', function(){
-				update_current_issues();
-				parent.openIssue();
-				$('#issue').hide();
-				$('#controls').fadeIn();
-				$('#cancelCapture').show();
-				makeScreenshot();
-				$('#controls textarea').focus();
-				$('#description').val('');
-				$('#priority').val('');
-				$('#link').val('');
+				toggle_capture();
 
 			});
 
 		    $('button#view_issues').on('click', function(){
 		        //parent.openViewIssues();
+		        parent.closeIssue();
+				$('#controls').hide();
+				//$('#cancelCapture').hide();
+				closeScreenshot();
 		        window.open('<?php echo self::$uri;?>view_issues=true', '_self');
 		    });
 
@@ -1558,11 +1534,7 @@ class GRAVITATE_QA_TRACKER {
 			});
 
 			$('button#cancelCapture').on('click', function(){
-				parent.closeIssue();
-				$('#controls').hide();
-				$('#cancelCapture').hide();
-				$('#issue').show();
-				closeScreenshot();
+				toggle_capture();
 			});
 
 			$('#priority').on('change', function()
@@ -1593,6 +1565,8 @@ class GRAVITATE_QA_TRACKER {
 				return false;
 			});
 
+
+
 			jQuery(window).resize(function() {
 
 		         jQuery('#screenSize').html(jQuery(window).width());
@@ -1605,6 +1579,31 @@ class GRAVITATE_QA_TRACKER {
 
 		});//ready
 
+		function toggle_capture()
+		{
+			if(!$('#issue:hidden').length)
+			{
+				update_current_issues();
+				parent.openIssue();
+				$('#issue').hide();
+				$('#controls').fadeIn();
+				$('#cancelCapture').show();
+				makeScreenshot();
+				$('#controls textarea').focus();
+				$('#description').val('');
+				$('#priority').val('');
+				$('#link').val('');
+			}
+			else
+			{
+				parent.closeIssue();
+				$('#controls').hide();
+				$('#cancelCapture').hide();
+				$('#issue').show();
+				closeScreenshot();
+			}
+		}
+
 		function KeyPress(e) {
 			var evtobj = window.event? event : e
 			if(evtobj.keyCode == 90 && (evtobj.ctrlKey || evtobj.metaKey))
@@ -1615,7 +1614,8 @@ class GRAVITATE_QA_TRACKER {
 			}
 			if(evtobj.keyCode == 67 && (evtobj.ctrlKey || evtobj.metaKey))
 			{
-				makeScreenshot();
+				//makeScreenshot();
+				toggle_capture();
 			}
 		}
 		function closeScreenshot()
@@ -1689,8 +1689,11 @@ class GRAVITATE_QA_TRACKER {
 		    //alert(1);
 
 		    parent.gravWindowMain.html2canvas(parent.gravWindowMain.document.body, {
+		    	logging: false,
+		    	proxy: '<?php echo plugins_url( 'html2canvasproxy.php', __FILE__ );?>',
 		        onrendered: function(_canvas) {
 		            //alert(2);
+		            console.log(_canvas);
 		            var img_data = _canvas.toDataURL("image/png", 0.1);
 
 		            if(img_data)
