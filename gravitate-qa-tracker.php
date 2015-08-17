@@ -22,6 +22,7 @@ class GRAVITATE_QA_TRACKER {
 	private static $option_key = 'gravitate_qa_tracker_settings';
 
 	private static $uri;
+	private static $uri_root;
 
 	private static $user = false;
 	private static $access = false;
@@ -75,10 +76,12 @@ class GRAVITATE_QA_TRACKER {
 		self::$uri = str_replace('?'.$_SERVER['QUERY_STRING'], '', $_SERVER['REQUEST_URI']);
 		self::$uri.= (!empty($_GET['gravqatracker']) ? '?gravqatracker='.$_GET['gravqatracker'].'&' : '?');
 
+		self::$uri_root = dirname(str_replace('?'.$_SERVER['QUERY_STRING'], '', $_SERVER['REQUEST_URI']));
+
 		if(!empty($_COOKIE['grav_issues_user']))
 		{
 			self::$user = unserialize(base64_decode($_COOKIE['grav_issues_user']));
-			setcookie("grav_issues_user", $_COOKIE['grav_issues_user']     , time()+3600, "/");
+			setcookie("grav_issues_user", $_COOKIE['grav_issues_user'], time()+3600, "/");
 		}
 
 		if((!empty(self::$settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['full_static_url']) !== false) || (!empty(self::$settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['limited_static_url']) !== false) || (!empty($_GET['gravqatracker'])))
@@ -252,7 +255,7 @@ class GRAVITATE_QA_TRACKER {
 	        {
 	        	$data = get_post_meta( $issue->ID, 'gravitate_issue_data', 1);
 
-	        	if($url == $data['url'])
+	        	if($url == $data['url'] && $data['location'] == 'active')
 	        	{
 		            $description = str_replace('"','', $data['description']);
 		            $description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
@@ -507,8 +510,10 @@ class GRAVITATE_QA_TRACKER {
 
 	static function enqueue_scripts()
 	{
-		//wp_enqueue_style( 'plugins', $library_location . 'css/gravitate-issue-tracker.css');
-	    wp_enqueue_script( 'js_plugins', plugins_url( 'js/html2canvas_0.5.0.js', __FILE__ ));
+		if(self::$user)
+		{
+	    	wp_enqueue_script( 'js_plugins', plugins_url( 'js/html2canvas_0.5.0.js', __FILE__ ));
+	    }
 	}
 
 	static function settings()
@@ -753,16 +758,10 @@ class GRAVITATE_QA_TRACKER {
 		<script src="<?php echo plugins_url( 'slickgrid/slick.editors.js?v=01', __FILE__ );?>"></script>
 
 		</head>
-		<body id="view-issues">
+		<body id="view-issues" class="<?php echo self::$access;?>-access">
 		<div id="view_header">
 			<button id="cancel_views" onclick="">< Back</button>
-			<select id="location" name="location">
-				<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'active' ? true : false);?> value="active">Active</option>
-				<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'archive' ? true : false);?> value="archive">Archived</option>
-				<?php if(self::$access == 'full'){ ?>
-					<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'trash' ? true : false);?> value="trash">Trashed</option>
-				<?php } ?>
-			</select>
+			<span class="total-issues"></span>
 			<?php if(self::$access == 'full'){ ?>
 			<select id="with-selected" name="with_selected">
 				<option value="">- With Selected -</option>
@@ -780,17 +779,29 @@ class GRAVITATE_QA_TRACKER {
 				<!-- <option value="status:resolve">Mark as RESOLVED</option> -->
 			</select>
 			<?php } ?>
+			<select id="location" name="location">
+				<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'active' ? true : false);?> value="active">View Active</option>
+				<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'archive' ? true : false);?> value="archive">View Archived</option>
+				<?php if(self::$access == 'full'){ ?>
+					<option <?php selected(!empty($_GET['location']) && $_GET['location'] == 'trash' ? true : false);?> value="trash">View Trashed</option>
+				<?php } ?>
+			</select>
+
+			<a class="new-window" target="_blank" href="<?php echo self::$uri;?>view_issues=true"><i class="fa fa-external-link"></i></a>
+
 			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
 			<input placeholder="Filter..." id="search" type="text">
 		</div>
 		<div id="grid-container"></div>
 		<script>
 
-		var current_page = parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search;
+		if(typeof parent.gravWindowMain != 'undefined')
+		{
+			var current_page = parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search;
+			parent.openViewIssues();
+		}
 
 		var grid;
-
-		parent.openViewIssues();
 
 		var _original_grid_data = [];
 
@@ -800,13 +811,30 @@ class GRAVITATE_QA_TRACKER {
 				window.open('<?php echo self::$uri;?>view_issues=true&location='+$(this).val(), '_self');
 			});
 
-			$('button#cancel_views').on('click', function(){
-				if(current_page != parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search){
-					parent.gravWindowMain.location = current_page;
-				}
-		        parent.closeIssue();
-		        window.open('<?php echo self::$uri;?>gissues_controls=1', '_self');
-		    });
+			if(typeof parent.gravWindowMain != 'undefined')
+			{
+				$('button#cancel_views').on('click', function(){
+					if(current_page != parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search){
+						parent.gravWindowMain.location = current_page;
+					}
+			        parent.closeIssue();
+			        window.open('<?php echo self::$uri;?>gissues_controls=1', '_self');
+			    });
+
+			    $('.new-window').on('click', function(e)
+			    {
+			    	e.preventDefault();
+			    	$('button#cancel_views').click();
+			    	parent.popupQaViewsWindow = window.open('<?php echo self::$uri;?>view_issues=true', 'popupQaViewsWindow', 'width=900, height=600');
+			    });
+		    }
+		    else
+		    {
+		    	$('button#cancel_views').hide();
+		    	$('.new-window').hide();
+		    }
+
+
 
 		    $('#search').on('keyup', function()
 		    {
@@ -888,7 +916,7 @@ class GRAVITATE_QA_TRACKER {
 				                	{
 				                		var data = grid.getData();
 
-				                		console.log(data);
+				                		//console.log(data);
 
 				                		$('.checkbox-label input:checked').each(function(index)
 				                		{
@@ -915,13 +943,48 @@ class GRAVITATE_QA_TRACKER {
 			    }
 		    });
 
-		    $(window).resize(function(){
+		    function update_grid_width()
+		    {
 				var cols = grid.getColumns();
-			    cols[<?php echo (self::$access == 'full' ? 6 : 5); ?>].width = ($(window).width()-<?php echo (self::$access == 'full' ? 708 : 670); ?>);
+
+				var w = $(window).width();
+
+				if(w > 767)
+				{
+					grid.setOptions({rowHeight: 40});
+					grid.invalidate();
+
+					cols[<?php echo (self::$access == 'full' ? 2 : 1); ?>].width = 150;
+		    		cols[<?php echo (self::$access == 'full' ? 3 : 2); ?>].width = 120;
+		    		cols[<?php echo (self::$access == 'full' ? 4 : 3); ?>].width = 120;
+		    		cols[<?php echo (self::$access == 'full' ? 5 : 4); ?>].width = 110;
+			    	cols[<?php echo (self::$access == 'full' ? 6 : 5); ?>].width = ( w - <?php echo (self::$access == 'full' ? 728 : 690); ?>);
+			    }
+			    else
+			    {
+			    	grid.setOptions({rowHeight: 97});
+					grid.invalidate();
+
+			    	var new_w = (w / 7);
+		    		cols[<?php echo (self::$access == 'full' ? 2 : 1); ?>].width = new_w;
+		    		cols[<?php echo (self::$access == 'full' ? 3 : 2); ?>].width = new_w;
+		    		cols[<?php echo (self::$access == 'full' ? 4 : 3); ?>].width = new_w;
+		    		cols[<?php echo (self::$access == 'full' ? 5 : 4); ?>].width = new_w;
+			    	cols[<?php echo (self::$access == 'full' ? 6 : 5); ?>].width = 0;
+			    	//cols[<?php echo (self::$access == 'full' ? 7 : 5); ?>].width = new_w;
+			    }
+
 			    grid.setColumns(cols);
 			    grid.resizeCanvas();
 				add_grid_listeners();
-			});
+			}
+
+			$(window).resize(function()
+		    {
+		    	update_grid_width();
+		    });
+
+		    update_grid_width();
 
 		});
 
@@ -1066,12 +1129,12 @@ class GRAVITATE_QA_TRACKER {
 		  var data = [], raw_data,
 		      columns = [
 		          <?php if(self::$access == 'full'){ ?>{ id: "checkbox", name: "&nbsp;", field: "checkbox", width: 40, sortable: false},<?php } ?>
-		          { id: "id", name: "#", field: "id", width: 40, sortable: true, sorter: sorterNumeric },
+		          { id: "id", name: "#", field: "id", width: 60, sortable: true, sorter: sorterNumeric },
 		          { id: "status", name: "Status", field: "status", width: 150, sortable: true, sorter: sorterStringCompare },
 		          { id: "department", name: "Department", field: "department", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "priority", name: "Priority", field: "priority", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "created_by", name: "Created By", field: "created_by", width: 110, sortable: true, sorter: sorterStringCompare },
-		          { id: "description", name: "Description", field: "description", width: ($(window).width()-<?php echo (self::$access == 'full' ? 708 : 670); ?>), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
+		          { id: "description", name: "Description", field: "description", width: ($(window).width()-<?php echo (self::$access == 'full' ? 728 : 690); ?>), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
 		          //{ id: "url", name: "URL", field: "url", width: 60, sortable: true, sorter: sorterStringCompare },
 		          //{ id: "screenshot", name: "Screenshot", field: "screenshot", width: 120, sortable: true, sorter: sorterStringCompare }
 		          { id: "info", name: "Info", field: "info", width: 130, sortable: true, sorter: sorterStringCompare }
@@ -1092,6 +1155,8 @@ class GRAVITATE_QA_TRACKER {
 
 		    $issues = get_posts(array('post_type' => 'gravitate_issue', 'post_status' => 'draft', 'posts_per_page' => -1));
 
+		    $total_issues = 0;
+
 		    if($issues)
 		    {
 		        $num = 0;
@@ -1101,6 +1166,8 @@ class GRAVITATE_QA_TRACKER {
 
 		        	if(((empty($_GET['location']) || $_GET['location'] == 'active') && (empty($data['location']) || $data['location'] == 'active')) || (!empty($_GET['location']) && !empty($data['location']) && $data['location'] == $_GET['location']))
 		        	{
+		        		$total_issues++;
+
 			            $description = str_replace('"','', $data['description']);
 			            $description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
 
@@ -1119,11 +1186,11 @@ class GRAVITATE_QA_TRACKER {
 			                <?php if(self::$access == 'full'){ ?>checkbox: '<label class="checkbox-label"><input class="update_data" type="checkbox" name="id[\'<?php echo $issue->ID;?>\']" value="<?php echo $issue->ID;?>"></label>',<?php } ?>
 			                id: "<?php echo $issue->ID;?>",
 			                status: inner_start+"<select id=\"status\" class=\"status update_data\"><?php if(!empty(self::$settings['status'])){foreach(self::$settings['status'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['status'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
-			                department: inner_start+"<select id=\"department\" class=\"department update_data\"><?php if(!empty(self::$settings['departments'])){foreach(self::$settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
+			                department: inner_start+"<select id=\"department\" class=\"department update_data\"><option value=\"\"></option><?php if(!empty(self::$settings['departments'])){foreach(self::$settings['departments'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['department'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 			                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty(self::$settings['priorities'])){foreach(self::$settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 			                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
 			                description: inner_start+'<?php echo $description;?></p>',
-			                info: inner_start+'<a class="btn" target="GravSupportWindowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-file-o"></i></a><a class="btn external_link<?php if(empty($data['link'])){ ?> inactive<?php } ?>" <?php if(!empty($data['link'])){ ?>target="_blank" <?php } ?>title="<?php echo $data['link'];?>"<?php if(!empty($data['link'])){ ?> href="<?php echo $data['link'];?>"<?php } ?>><i class="fa fa-link"></i></a><a class="btn" target="GravSupportWindowMain" href="<?php echo str_replace(array('http:', 'https:'), '', $data['screenshot']);?>"><i class="fa fa-photo"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a></p>'
+			                info: inner_start+'<a class="btn" target="GravSupportWindowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-file-o"></i></a><a class="btn" target="GravSupportWindowMain" href="<?php echo str_replace(array('http:', 'https:'), '', $data['screenshot']);?>"><i class="fa fa-photo"></i></a><a class="btn external_link<?php if(empty($data['link'])){ ?> inactive<?php } ?>" <?php if(!empty($data['link'])){ ?>target="_blank" <?php } ?>title="<?php echo $data['link'];?>"<?php if(!empty($data['link'])){ ?> href="<?php echo $data['link'];?>"<?php } ?>><i class="fa fa-link"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a></p>'
 			            };
 
 			            data[<?php echo $num;?>] = raw_data;
@@ -1137,6 +1204,8 @@ class GRAVITATE_QA_TRACKER {
 		    }
 		    ?>
 
+		    $('.total-issues').html(<?php echo $total_issues;?>);
+
 		  	grid = new Slick.Grid("#grid-container", data, columns, options);
 
 			// grid.onSort.subscribe(function (e, args) {
@@ -1148,7 +1217,7 @@ class GRAVITATE_QA_TRACKER {
 
 			grid.onCellChange.subscribe(function (e,args) {
 
-				console.log(args);
+				//console.log(args);
 
                 var cols = grid.getColumns();
 
@@ -1522,13 +1591,16 @@ class GRAVITATE_QA_TRACKER {
 		        {
 		    		if(!storedLines.length)
 		    		{
-		    			alert("You need to create at least one arrow pointing to the location of the issue.\n\nYou can create an arrow by clicking and dragging within the red box.");
+		    			//alert("You need to create at least one arrow pointing to the location of the issue.\n\nYou can create an arrow by clicking and dragging within the red box.");
+		    			if(confirm("There are no arrows pointing to an issue.\n\nClick OK if you want to submit the issue without creating any arrows")){
+		                    saveScreenshotData();
+		    			}
 		    		}
 		    		else
 		    		{
-		    			if(confirm("Click OK to submit the Issue.\n\nPlease make sure that your Description is easy to understand.")){
+		    			//if(confirm("Click OK to submit the Issue.\n\nPlease make sure that your Description is easy to understand.")){
 		                    saveScreenshotData();
-		    			}
+		    			//}
 		    		}
 		        }
 			});
@@ -1551,16 +1623,19 @@ class GRAVITATE_QA_TRACKER {
 
 			$('.change-url-link').on('click', function(e)
 			{
-				$('#change-url-form').toggleClass('open');
-				if($('#change-url-form').hasClass('open'))
-				{
-					$('.change-url').focus();
-				}
+				// $('#change-url-form').toggleClass('open');
+				// if($('#change-url-form').hasClass('open'))
+				// {
+				// 	$('.change-url').focus();
+				// }
+				closeIssueCapture();
+				parent.gravWindowMain.location.href = '<?php echo self::$uri_root;?>';
 			});
 
 			$('#change-url-form').on('submit', function(e)
 			{
 				e.preventDefault();
+				closeIssueCapture();
 				parent.gravWindowMain.location.href = $('.change-url').val();
 				return false;
 			});
@@ -1579,6 +1654,15 @@ class GRAVITATE_QA_TRACKER {
 
 		});//ready
 
+		function updateURL()
+		{
+			if(typeof parent.gravWindowMain != 'undefined')
+			{
+				jQuery('.change-url').val(parent.gravWindowMain.location.href);
+				closeIssueCapture();
+			}
+		}
+
 		function toggle_capture()
 		{
 			if(!$('#issue:hidden').length)
@@ -1591,20 +1675,27 @@ class GRAVITATE_QA_TRACKER {
 				makeScreenshot();
 				$('#controls textarea').focus();
 				$('#description').val('');
+				$('#department').val('');
 				$('#priority').val('');
 				$('#link').val('');
 			}
 			else
 			{
-				parent.closeIssue();
-				$('#controls').hide();
-				$('#cancelCapture').hide();
-				$('#issue').show();
-				closeScreenshot();
+				closeIssueCapture();
 			}
 		}
 
-		function KeyPress(e) {
+		function closeIssueCapture()
+		{
+			parent.closeIssue();
+			$('#controls').hide();
+			$('#cancelCapture').hide();
+			$('#issue').show();
+			closeScreenshot();
+		}
+
+		function KeyPress(e)
+		{
 			var evtobj = window.event? event : e
 			if(evtobj.keyCode == 90 && (evtobj.ctrlKey || evtobj.metaKey))
 			{
@@ -1612,7 +1703,7 @@ class GRAVITATE_QA_TRACKER {
 				ctx.clearRect(0,0,maxx,maxy);
 				redrawStoredLines(ctx);
 			}
-			if(evtobj.keyCode == 67 && (evtobj.ctrlKey || evtobj.metaKey))
+			if(evtobj.keyCode == 67 && (evtobj.ctrlKey || evtobj.metaKey) && evtobj.shiftKey)
 			{
 				//makeScreenshot();
 				toggle_capture();
@@ -1620,9 +1711,9 @@ class GRAVITATE_QA_TRACKER {
 		}
 		function closeScreenshot()
 		{
-		    if(parent.gravWindowMain.document.getElementById('drawing'))
+		    if(parent.gravWindowMain.document.getElementById('qadrawing'))
 		    {
-		        elem=parent.gravWindowMain.document.getElementById('drawing');
+		        elem=parent.gravWindowMain.document.getElementById('qadrawing');
 		        elem.parentNode.removeChild(elem);
 		        storedLines = [];
 		        $(parent.gravWindowMain.window).off('mousedown').off('mousemove').off('mouseup');
@@ -1632,20 +1723,14 @@ class GRAVITATE_QA_TRACKER {
 		}
 		function makeScreenshot()
 		{
-			if(parent.gravWindowMain.document.getElementById('drawing'))
-			{
-				elem=parent.gravWindowMain.document.getElementById('drawing');
-				elem.parentNode.removeChild(elem);
-				storedLines = [];
-				$(parent.gravWindowMain.window).off('mousedown').off('mousemove').off('mouseup');
-				$('button#capture-status').html('Start Capture');
-				$('button#capture').hide();
-
-			}
-			else
+			if(parent.gravWindowMain.document.getElementById('qadrawing'))
+		    {
+		        closeScreenshot();
+		    }
+			else // Add Screen Shot
 			{
 				canvas = parent.gravWindowMain.document.createElement('canvas');
-		        canvas.id = 'drawing';
+		        canvas.id = 'qadrawing';
 		        canvas.style.position = 'absolute';
 		        canvas.style.top = $(parent.gravWindowMain).scrollTop()+'px';
 		        canvas.style.left = '0';
@@ -1662,12 +1747,16 @@ class GRAVITATE_QA_TRACKER {
 
 				parent.gravWindowMain.document.getElementsByTagName('body')[0].appendChild(canvas);
 
-				//var attach_to = $.browser.msie ? '#drawing' : window;
-				$obj = $(parent.gravWindowMain.window.document.getElementById('drawing'));
+				//var attach_to = $.browser.msie ? '#qadrawing' : window;
+				$obj = $(parent.gravWindowMain.window.document.getElementById('qadrawing'));
 				ctx = canvas.getContext('2d');
 				$(parent.gravWindowMain.window).mousedown(mDown).mousemove(mMove).mouseup(mDone);
 				$('button#capture-status').html('Cancel Capture');
 				$('button#capture').show();
+
+				$obj.on('click', function(e){
+					e.stopPropagation();
+				});
 			}
 		}
 
@@ -1693,7 +1782,7 @@ class GRAVITATE_QA_TRACKER {
 		    	proxy: '<?php echo plugins_url( 'html2canvasproxy.php', __FILE__ );?>',
 		        onrendered: function(_canvas) {
 		            //alert(2);
-		            console.log(_canvas);
+		            //console.log(_canvas);
 		            var img_data = _canvas.toDataURL("image/png", 0.1);
 
 		            if(img_data)
@@ -1709,7 +1798,7 @@ class GRAVITATE_QA_TRACKER {
 		                    os: jscd.os +' '+ jscd.osVersion,
 		                    ip: '<?php echo self::real_ip();?>',
 		                    created_by: $('#created_by').val(),
-		                    department: 'Developer',
+		                    department: $('#department').val(),
 		                    priority: $('#priority').val(),
 		                    screenshot: '',
 		                    screenshot_data: img_data,
@@ -1728,6 +1817,11 @@ class GRAVITATE_QA_TRACKER {
 								$('#issue').show();
 		                        closeScreenshot();
 		                        parent.gravWindowMain.document.body.removeChild(parent.gravWindowMain.document.getElementById('captureLoadingDiv'));
+
+		                        if(typeof parent.popupQaViewsWindow != 'undefined')
+		                        {
+		                        	parent.popupQaViewsWindow.window.location.reload(true);
+		                        }
 		                    }
 		                    else
 		                    {
@@ -1738,7 +1832,7 @@ class GRAVITATE_QA_TRACKER {
 		            }
 		        },
 		        //type: 'view',
-		        top: $(parent.gravWindowMain.window.document.getElementById('drawing')).offset().top,
+		        top: $(parent.gravWindowMain.window.document.getElementById('qadrawing')).offset().top,
 		        height: ($(parent.gravWindowMain).height()+8)
 		    });
 		};
@@ -1750,7 +1844,7 @@ class GRAVITATE_QA_TRACKER {
 		        onrendered: function(_canvas) {
 
 		        	//canvas = _canvas;
-		        	//canvas = document.getElementById('drawing');
+		        	//canvas = document.getElementById('qadrawing');
 
 					//document.getElementById('redraw').onclick = randomLines;
 				    //randomLines();
@@ -1764,7 +1858,7 @@ class GRAVITATE_QA_TRACKER {
 
 		        },
 		        //type: 'view',
-		        top: $(parent.gravWindowMain.window.document.getElementById('drawing')).offset().top,
+		        top: $(parent.gravWindowMain.window.document.getElementById('qadrawing')).offset().top,
 				height: ($(parent.gravWindowMain).height()+8)
 		    });
 		};
@@ -1910,7 +2004,7 @@ class GRAVITATE_QA_TRACKER {
 
 		function debug_msg(msg)
 		{
-			console.log(msg);
+			//console.log(msg);
 		};
 
 		var arrow_shape = [
@@ -1964,13 +2058,13 @@ class GRAVITATE_QA_TRACKER {
 			</form>
 			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
 		</div>
-		<div id="controls">
+		<div id="controls"<?php if(self::$access == 'full'){ ?> class="full-access"<?php } ?>>
 			<div class="left" style="width: 63%;">
-				<label>Description *</label><br>
-				<textarea id="description" required></textarea>
+				<br>
+				<textarea id="description" required placeholder="Description *"></textarea>
 				<br>
 		        <select id="priority" name="priority" required>
-		        <option value=""> - Priority * - </option>
+		        	<option value=""> - Priority * - </option>
 		        	<?php
 
 				    if(!empty(self::$settings['priorities']))
@@ -1985,11 +2079,29 @@ class GRAVITATE_QA_TRACKER {
 
 				    ?>
 		        </select>
+		        <?php if(self::$access == 'full'){ ?>
+		        <select id="department" name="department">
+		        	<option value=""> - Department - </option>
+		        	<?php
+
+				    if(!empty(self::$settings['departments']))
+		            {
+		            	foreach(self::$settings['departments'] as $k => $v)
+		            	{
+		          			?>
+		          			<option value="<?php echo sanitize_title($v['value']);?>"><?php echo $v['value'];?></option>
+		          			<?php
+		          		}
+		          	}
+
+				    ?>
+		        </select>
+		        <?php } ?>
 		        <input type="text" id="link" name="link" placeholder="(optional link)">
 		        <button id="sendCapture">Submit Issue</button>
 			</div>
 			<div class="right" style="width: 34%;">
-				<label>Current Issues on this page</label><br>
+				<br><label>Current Issues on this page</label><br>
 				<div id="current-issues">
 
 				</div>
@@ -2014,6 +2126,8 @@ class GRAVITATE_QA_TRACKER {
 		{
 			//jQuery(gravWindowControls.update_current_issues());
 			gravWindowMain.document.onkeydown = gravWindowControls.KeyPress;
+
+			gravWindowControls.updateURL();
 
 			if(gravWindowMain.windowMain)
 			{
