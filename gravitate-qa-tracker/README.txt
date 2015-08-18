@@ -22,7 +22,7 @@ Description: This is Plugin allows you and your users to Track Website issues.  
 
 ==How to Use==
 
-Enable the Plugin in the Plugins Page. The use the default url to access the tracker page "/qatracker"
+Enable the Plugin in the Plugins Page. The use the "/qatracker" url to access the tracker page
 
 
 == Installation ==
