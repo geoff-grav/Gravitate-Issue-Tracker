@@ -7,14 +7,23 @@ Description: This is Plugin allows you and your users to Track Website issues.
 Version: 1.0.0
 */
 
-// ini_set('error_reporting', E_ALL);
-// ini_set('display_errors', 1);
-
 // Make sure we don't expose any info if called directly
 if ( !function_exists( 'add_action' ) ) {
 	echo 'Gravitate Issue Tracker.';
 	exit;
 }
+
+
+add_action( 'wp_ajax_save_issues', array('GRAVITATE_QA_TRACKER', 'save_issues'));
+
+register_activation_hook( __FILE__, array( 'GRAVITATE_QA_TRACKER', 'activate' ));
+add_action('admin_menu', array( 'GRAVITATE_QA_TRACKER', 'admin_menu' ));
+add_action('init', array( 'GRAVITATE_QA_TRACKER', 'init' ));
+add_action('wp_enqueue_scripts', array( 'GRAVITATE_QA_TRACKER', 'enqueue_scripts' ));
+add_action('admin_enqueue_scripts', array( 'GRAVITATE_QA_TRACKER', 'enqueue_scripts' ));
+add_filter('plugin_action_links_'.plugin_basename(__FILE__), array( 'GRAVITATE_QA_TRACKER', 'plugin_settings_link' ));
+
+
 
 class GRAVITATE_QA_TRACKER {
 
@@ -81,7 +90,7 @@ class GRAVITATE_QA_TRACKER {
 		if(!empty($_COOKIE['grav_issues_user']))
 		{
 			self::$user = unserialize(base64_decode($_COOKIE['grav_issues_user']));
-			setcookie("grav_issues_user", $_COOKIE['grav_issues_user'], time()+3600, "/");
+			setcookie("grav_issues_user", $_COOKIE['grav_issues_user'], time()+172800, "/");
 		}
 
 		if((!empty(self::$settings['full_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['full_static_url']) !== false) || (!empty(self::$settings['limited_static_url']) && strpos($_SERVER['REQUEST_URI'], self::$settings['limited_static_url']) !== false) || (!empty($_GET['gravqatracker'])))
@@ -450,7 +459,6 @@ class GRAVITATE_QA_TRACKER {
 
 		    	if(!empty($upload_dir['path']))
 		    	{
-			        //file_put_contents(dirname(dirname(__FILE__)).'/capture_images/'.$image_name, base64_decode($_POST['screenshot_data']));
 			        $data = base64_decode(substr($_POST['screenshot_data'], (strpos($_POST['screenshot_data'], ',')+1)));
 
 			        $im = imagecreatefromstring($data);
@@ -547,7 +555,6 @@ class GRAVITATE_QA_TRACKER {
 				{
 					$_POST['settings']['updated_at'] = time();
 					$settings = array_merge(get_option(self::$option_key), $_POST['settings']);
-					// $error = 'There was an error saving the Settings (Cannot access disk). Please try again.';
 
 					if(update_option( self::$option_key, $settings ))
 					{
@@ -680,8 +687,7 @@ class GRAVITATE_QA_TRACKER {
 			<meta charset="utf-8">
 			<title>Issues</title>
 			<link rel="stylesheet" href="<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>" type="text/css"/>
-			<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
-			<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
+			<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>" rel="stylesheet">
 			<style>
 			html, body { height: 100%; overflow: hidden; }
 			</style>
@@ -746,10 +752,12 @@ class GRAVITATE_QA_TRACKER {
 		<title>Issues</title>
 		<link rel="stylesheet" href="<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>" type="text/css"/>
 		<link rel="stylesheet" href="<?php echo plugins_url( 'slickgrid/slick.grid.css', __FILE__ );?>" type="text/css"/>
-		<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+		<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>" rel="stylesheet">
+
+		<!-- Slick Grid does not work with updated version of jquery so load an older version -->
 		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery-1.7.min.js', __FILE__ );?>"></script>
 		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery-ui-1.8.16.custom.min.js', __FILE__ );?>"></script>
-		<!-- <script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script> -->
+
 		<script src="<?php echo plugins_url( 'js/colorbox.js', __FILE__ );?>"></script>
 		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery.event.drag-2.2.js', __FILE__ );?>"></script>
 
@@ -916,8 +924,6 @@ class GRAVITATE_QA_TRACKER {
 				                	{
 				                		var data = grid.getData();
 
-				                		//console.log(data);
-
 				                		$('.checkbox-label input:checked').each(function(index)
 				                		{
 				                			data.splice(($(this).closest('.slick-row').index()-index), 1);
@@ -971,7 +977,6 @@ class GRAVITATE_QA_TRACKER {
 		    		cols[<?php echo (self::$access == 'full' ? 4 : 3); ?>].width = new_w;
 		    		cols[<?php echo (self::$access == 'full' ? 5 : 4); ?>].width = new_w;
 			    	cols[<?php echo (self::$access == 'full' ? 6 : 5); ?>].width = 0;
-			    	//cols[<?php echo (self::$access == 'full' ? 7 : 5); ?>].width = new_w;
 			    }
 
 			    grid.setColumns(cols);
@@ -1135,16 +1140,12 @@ class GRAVITATE_QA_TRACKER {
 		          { id: "priority", name: "Priority", field: "priority", width: 120, sortable: true, sorter: sorterStringCompare },
 		          { id: "created_by", name: "Created By", field: "created_by", width: 110, sortable: true, sorter: sorterStringCompare },
 		          { id: "description", name: "Description", field: "description", width: ($(window).width()-<?php echo (self::$access == 'full' ? 728 : 690); ?>), sortable: true, sorter: sorterStringCompare, editor: Slick.Editors.LongText },
-		          //{ id: "url", name: "URL", field: "url", width: 60, sortable: true, sorter: sorterStringCompare },
-		          //{ id: "screenshot", name: "Screenshot", field: "screenshot", width: 120, sortable: true, sorter: sorterStringCompare }
 		          { id: "info", name: "Info", field: "info", width: 130, sortable: true, sorter: sorterStringCompare }
 		      ],
 		      options = {
 		        enableCellNavigation: true,
 		        enableColumnReorder: true,
 		        multiColumnSort: true,
-		        //autoHeight: true,
-		        //forceFitColumns: true,
 		        syncColumnCellResize: true,
 		        rowHeight: 40,
 		        defaultFormatter: HTMLFormatter,
@@ -1208,16 +1209,7 @@ class GRAVITATE_QA_TRACKER {
 
 		  	grid = new Slick.Grid("#grid-container", data, columns, options);
 
-			// grid.onSort.subscribe(function (e, args) {
-			//   currentSortCol = args.sortCol;
-			//   isAsc = args.sortAsc;
-			//   grid.invalidateAllRows();
-			//   grid.render();
-			// });
-
 			grid.onCellChange.subscribe(function (e,args) {
-
-				//console.log(args);
 
                 var cols = grid.getColumns();
 
@@ -1235,7 +1227,6 @@ class GRAVITATE_QA_TRACKER {
 		            {
 		                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
 		                {
-		                    //
 		                    $('body').removeClass('loading');
 		                }
 		                else
@@ -1243,7 +1234,7 @@ class GRAVITATE_QA_TRACKER {
 		                	$('body').removeClass('loading');
 
 		                    // Error
-		                    alert('1111111There was an error Saving the Issue. Please try again or contact your Account Manager.');
+		                    alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
 		                }
 		                add_grid_listeners();
 		            });
@@ -1283,16 +1274,6 @@ class GRAVITATE_QA_TRACKER {
 
 			add_grid_listeners();
 
-
-		  //   grid.onSort.subscribe(function(e, args) {
-		  //   sortdir = args.sortAsc ? 1 : -1;
-		  //   sortcol = args.sortCol.field;
-
-		  //   data_view.sort(args.sortCol.sorter, sortdir);
-		  //   args.grid.invalidateAllRows();
-		  //   args.grid.render();
-		  // });
-
 		</script>
 		</body>
 		</html>
@@ -1308,7 +1289,6 @@ class GRAVITATE_QA_TRACKER {
 		<meta charset="utf-8">
 		<title>Issues</title>
 		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
-		<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
 		<script type='text/javascript'>
 			parent.showProfile();
 		</script>
@@ -1345,10 +1325,12 @@ class GRAVITATE_QA_TRACKER {
 		<head>
 		<meta charset="utf-8">
 		<title>Issues</title>
-		<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+		<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>" rel="stylesheet">
 		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
-		<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
+		<script type='text/javascript' src='<?php echo includes_url();?>/js/jquery/jquery.js'></script>
 		<script type='text/javascript'>
+
+		var $ = jQuery;
 
 		parent.closeIssue();
 
@@ -1515,7 +1497,6 @@ class GRAVITATE_QA_TRACKER {
 		        }
 
 		        // flash (you'll need to include swfobject)
-		        /* script src="//ajax.googleapis.com/ajax/libs/swfobject/2.2/swfobject.js" */
 		        var flashVersion = 'no check';
 		        if (typeof swfobject != 'undefined') {
 		            var fv = swfobject.getFlashPlayerVersion();
@@ -1540,7 +1521,7 @@ class GRAVITATE_QA_TRACKER {
 		    };
 		}(this));
 
-		jQuery(document).ready(function() {
+		jQuery(document).ready(function($) {
 
 		    setTimeout(function(){
 		    	jQuery('#input').val(parent.gravWindowMain.location.href);
@@ -1569,10 +1550,8 @@ class GRAVITATE_QA_TRACKER {
 			});
 
 		    $('button#view_issues').on('click', function(){
-		        //parent.openViewIssues();
 		        parent.closeIssue();
 				$('#controls').hide();
-				//$('#cancelCapture').hide();
 				closeScreenshot();
 		        window.open('<?php echo self::$uri;?>view_issues=true', '_self');
 		    });
@@ -1598,9 +1577,7 @@ class GRAVITATE_QA_TRACKER {
 		    		}
 		    		else
 		    		{
-		    			//if(confirm("Click OK to submit the Issue.\n\nPlease make sure that your Description is easy to understand.")){
-		                    saveScreenshotData();
-		    			//}
+		                saveScreenshotData();
 		    		}
 		        }
 			});
@@ -1623,11 +1600,6 @@ class GRAVITATE_QA_TRACKER {
 
 			$('.change-url-link').on('click', function(e)
 			{
-				// $('#change-url-form').toggleClass('open');
-				// if($('#change-url-form').hasClass('open'))
-				// {
-				// 	$('.change-url').focus();
-				// }
 				closeIssueCapture();
 				parent.gravWindowMain.location.href = '<?php echo self::$uri_root;?>';
 			});
@@ -1641,15 +1613,17 @@ class GRAVITATE_QA_TRACKER {
 			});
 
 
-
 			jQuery(window).resize(function() {
 
 		         jQuery('#screenSize').html(jQuery(window).width());
 
-
 		    }).resize(); // Trigger resize handlers.
 
 		    jQuery('#screenSize').html(jQuery(window).width());
+
+
+		    // Check if URL needs to be updated
+		    updateURL();
 
 
 		});//ready
@@ -1705,7 +1679,6 @@ class GRAVITATE_QA_TRACKER {
 			}
 			if(evtobj.keyCode == 67 && (evtobj.ctrlKey || evtobj.metaKey) && evtobj.shiftKey)
 			{
-				//makeScreenshot();
 				toggle_capture();
 			}
 		}
@@ -1736,18 +1709,14 @@ class GRAVITATE_QA_TRACKER {
 		        canvas.style.left = '0';
 		        canvas.style.bottom = '0';
 		        canvas.style.right = '0';
-		        //canvas.style.border = '6px solid red';
 		        canvas.style.boxShadow = '0 0 0 6px red inset';
 		        canvas.style.zIndex = '1000000000';
 		        canvas.width = $(parent.gravWindowMain).width();
 		        canvas.height = ($(parent.gravWindowMain).height()-6);
 		        canvas.style.width = '100%';
-		        //canvas.draggable = 'false';
-		        //canvas.onclick = function(e){ alert(234); };
 
 				parent.gravWindowMain.document.getElementsByTagName('body')[0].appendChild(canvas);
 
-				//var attach_to = $.browser.msie ? '#qadrawing' : window;
 				$obj = $(parent.gravWindowMain.window.document.getElementById('qadrawing'));
 				ctx = canvas.getContext('2d');
 				$(parent.gravWindowMain.window).mousedown(mDown).mousemove(mMove).mouseup(mDone);
@@ -1775,19 +1744,16 @@ class GRAVITATE_QA_TRACKER {
 		    div.style.opacity = '0.7';
 		    div.style.zIndex = '1000000000';
 		    parent.gravWindowMain.document.body.appendChild(div);
-		    //alert(1);
 
 		    parent.gravWindowMain.html2canvas(parent.gravWindowMain.document.body, {
 		    	logging: false,
 		    	proxy: '<?php echo plugins_url( 'html2canvasproxy.php', __FILE__ );?>',
 		        onrendered: function(_canvas) {
-		            //alert(2);
-		            //console.log(_canvas);
+
 		            var img_data = _canvas.toDataURL("image/png", 0.1);
 
 		            if(img_data)
 		            {
-		                //alert(3);
 		                $.post( '<?php echo self::$uri;?>', {
 		                    save_issue: true,
 		                    status: 'pending',
@@ -1807,7 +1773,6 @@ class GRAVITATE_QA_TRACKER {
 		                },
 		                function(response)
 		                {
-		                    //alert(response);
 		                    if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
 		                    {
 		                        parent.closeIssue();
@@ -1831,7 +1796,6 @@ class GRAVITATE_QA_TRACKER {
 		                });
 		            }
 		        },
-		        //type: 'view',
 		        top: $(parent.gravWindowMain.window.document.getElementById('qadrawing')).offset().top,
 		        height: ($(parent.gravWindowMain).height()+8)
 		    });
@@ -1843,21 +1807,11 @@ class GRAVITATE_QA_TRACKER {
 			parent.gravWindowMain.html2canvas(parent.gravWindowMain.document.body, {
 		        onrendered: function(_canvas) {
 
-		        	//canvas = _canvas;
-		        	//canvas = document.getElementById('qadrawing');
-
-					//document.getElementById('redraw').onclick = randomLines;
-				    //randomLines();
-
-		            //parent.gravWindowMain.document.body.appendChild(canvas);
 		            var img = _canvas.toDataURL("image/png", 0);
-		            //jQuery('textarea').val(img);
 		            jQuery('#screenshots').append('<img src="'+img+'">');
-
 		            makeScreenshot();
 
 		        },
-		        //type: 'view',
 		        top: $(parent.gravWindowMain.window.document.getElementById('qadrawing')).offset().top,
 				height: ($(parent.gravWindowMain).height()+8)
 		    });
@@ -2036,11 +1990,9 @@ class GRAVITATE_QA_TRACKER {
                 	$('#current-issues').html('');
                 	response = response.split(']');
                 	response = response[0]+']';
-                	//alert(response);
                 	var items = JSON.parse(response);
                 	for(var i in items)
                 	{
-                		//alert(items[i].id);
                 		$('#current-issues').append('<a title="# '+items[i].id+'&#13;Status: '+items[i].status+'&#13;Created By: '+items[i].created_by+'&#13;'+items[i].description+'"><span>#'+items[i].id+'</span><span style="color:'+items[i].color+';">'+items[i].status+'</span>'+items[i].description+'</a>');
                 	}
                 }
@@ -2118,26 +2070,25 @@ class GRAVITATE_QA_TRACKER {
 		<html lang="en-US">
 		<head>
 		<meta charset="utf-8">
-		<title>Capture</title>
-		<script type='text/javascript' src='//code.jquery.com/jquery-2.0.3.min.js'></script>
+		<title>QA Tracker</title>
+		<link rel="shortcut icon" href="<?php echo plugins_url( 'favicon.ico', __FILE__ );?>" type="image/x-icon" />
+		<script type='text/javascript' src='<?php echo includes_url();?>/js/jquery/jquery.js'></script>
 		<script type='text/javascript'>
+
+		var $ = jQuery;
 
 		function frameLoaded()
 		{
-			//jQuery(gravWindowControls.update_current_issues());
 			gravWindowMain.document.onkeydown = gravWindowControls.KeyPress;
 
-			gravWindowControls.updateURL();
+			if(typeof gravWindowControls != 'undefined')
+			{
+				gravWindowControls.updateURL();
+			}
 
 			if(gravWindowMain.windowMain)
 			{
 				gravWindowMain = gravWindowMain.windowMain;
-
-				// var head = gravWindowMain.document.getElementsByTagName('head')[0];
-			 //    var script = gravWindowMain.document.createElement('script');
-			 //    script.type = 'text/javascript';
-			 //    script.src = "<?php echo plugins_url( 'js/html2canvas_0.5.0.js', __FILE__ );?>";
-			 //    head.appendChild(script);
 			}
 			else
 			{
@@ -2206,12 +2157,3 @@ class GRAVITATE_QA_TRACKER {
 	  return $links;
 	}
 }
-
-add_action( 'wp_ajax_save_issues', array('GRAVITATE_QA_TRACKER', 'save_issues'));
-
-register_activation_hook( __FILE__, array( 'GRAVITATE_QA_TRACKER', 'activate' ));
-add_action('admin_menu', array( 'GRAVITATE_QA_TRACKER', 'admin_menu' ));
-add_action('init', array( 'GRAVITATE_QA_TRACKER', 'init' ));
-add_action('wp_enqueue_scripts', array( 'GRAVITATE_QA_TRACKER', 'enqueue_scripts' ));
-add_action('admin_enqueue_scripts', array( 'GRAVITATE_QA_TRACKER', 'enqueue_scripts' ));
-add_filter('plugin_action_links_'.plugin_basename(__FILE__), array( 'GRAVITATE_QA_TRACKER', 'plugin_settings_link' ));

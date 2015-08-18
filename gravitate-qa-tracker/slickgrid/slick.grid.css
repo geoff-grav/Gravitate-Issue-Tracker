@@ -5,13 +5,15 @@ No built-in (selected, editable, highlight, flashing, invalid, loading, :focus) 
 classes should alter those!
 */
 
-.slick-header.ui-state-default, .slick-headerrow.ui-state-default {
+.slick-header.ui-state-default,
+.slick-headerrow.ui-state-default {
   width: 100%;
   overflow: hidden;
-  border-left: 0px;
+  border-left: 0;
 }
 
-.slick-header-columns, .slick-headerrow-columns {
+.slick-header-columns,
+.slick-headerrow-columns {
   position: relative;
   white-space: nowrap;
   cursor: default;
@@ -29,9 +31,9 @@ classes should alter those!
   margin: 0;
   padding: 4px;
   border-right: 1px solid silver;
-  border-left: 0px;
-  border-top: 0px;
-  border-bottom: 0px;
+  border-left: 0;
+  border-top: 0;
+  border-bottom: 0;
   float: left;
 }
 
@@ -53,11 +55,11 @@ classes should alter those!
 }
 
 .slick-sort-indicator-desc {
-  background: url(images/sort-desc.gif);
+  background: url('images/sort-desc.gif');
 }
 
 .slick-sort-indicator-asc {
-  background: url(images/sort-asc.gif);
+  background: url('images/sort-asc.gif');
 }
 
 .slick-resizable-handle {
@@ -66,7 +68,7 @@ classes should alter those!
   display: block;
   cursor: col-resize;
   width: 4px;
-  right: 0px;
+  right: 0;
   top: 0;
   height: 100%;
 }
@@ -80,13 +82,15 @@ classes should alter those!
   outline: 0;
 }
 
-.slick-row.ui-widget-content, .slick-row.ui-state-active {
+.slick-row.ui-widget-content,
+.slick-row.ui-state-active {
   position: absolute;
-  border: 0px;
+  border: 0;
   width: 100%;
 }
 
-.slick-cell, .slick-headerrow-column {
+.slick-cell,
+.slick-headerrow-column {
   position: absolute;
   border: 1px solid transparent;
   border-right: 1px dotted silver;
@@ -102,15 +106,11 @@ classes should alter those!
   cursor: default;
 }
 
-.slick-group {
-}
-
 .slick-group-toggle {
   display: inline-block;
 }
 
 .slick-cell.highlighted {
-  background: lightskyblue;
   background: rgba(0, 0, 255, 0.2);
   -webkit-transition: all 0.5s;
   -moz-transition: all 0.5s;
