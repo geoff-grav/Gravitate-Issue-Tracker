@@ -4,7 +4,7 @@
 Plugin Name: Gravitate QA Tracker
 Plugin URI: http://www.gravitatedesign.com
 Description: This is Plugin allows you and your users to Track Website issues.
-Version: 1.0.0
+Version: 1.2.0
 */
 
 // Make sure we don't expose any info if called directly
@@ -27,8 +27,9 @@ add_filter('plugin_action_links_'.plugin_basename(__FILE__), array( 'GRAVITATE_Q
 
 class GRAVITATE_QA_TRACKER {
 
-	private static $version = '1.0.0';
+	private static $version = '1.2.0';
 	private static $option_key = 'gravitate_qa_tracker_settings';
+	private static $users_key = 'gravitate_qa_tracker_users';
 
 	private static $uri;
 	private static $uri_root;
@@ -144,6 +145,17 @@ class GRAVITATE_QA_TRACKER {
 
 			if(!empty($_POST['grav_issues_user_email']) && !empty($_POST['save_user_profile']))
 			{
+				$users = get_option(self::$users_key);
+
+				if(empty($users) || !is_array($users))
+				{
+					$users = array();
+				}
+
+				$users[$_POST['grav_issues_user_name']] = array('email' => $_POST['grav_issues_user_email'], 'access' => self::$access);
+
+				update_option(self::$users_key, $users, false);
+
 				$value = base64_encode(serialize(array('email' => $_POST['grav_issues_user_email'], 'name' => $_POST['grav_issues_user_name'], 'access' => self::$access)));
 				if(setcookie("grav_issues_user", $value, time()+3600, "/"))
 				{
@@ -422,7 +434,43 @@ class GRAVITATE_QA_TRACKER {
 			'post_title'		  	=> self::$user['name'],
 		);
 
-		return wp_insert_post($args);
+		if(wp_insert_post($args))
+		{
+			// Send Email Notifications
+			if(!empty($_POST['notify_users']))
+			{
+				$users = get_option(self::$users_key);
+
+				$data = get_post_meta( $_POST['issue_id'], 'gravitate_issue_data', 1);
+				$description = str_replace('"','', $data['description']);
+				$description = strip_tags(str_replace(array("\n","\r","'"), "", $description));
+
+				$subject = 'New QA Tracker Comment';
+				$headers = 'From: QA Tracker - '.get_bloginfo('name').' <no-reply@'.$_SERVER['HTTP_HOST'].'>' . "\r\n";
+
+				foreach ($_POST['notify_users'] as $nofity_user)
+				{
+					if(!empty($users[$nofity_user]['email']))
+					{
+						$url = 'http'.(!empty($_SERVER['HTTPS']) ? 's' : '').'://'.$_SERVER['HTTP_HOST'].'/?gravqatracker='.self::$settings['hash_'.$users[$nofity_user]['access'].'_url'].'&view_issues=true';
+						$message = 'There was a new comment in the QA Tracker.<br><br><b>On Item:</b> #'.$_POST['issue_id'].'<br><b>Created By:</b> '.ucwords($data['created_by']).'<br>'.$description.'<br><br> <b>Comment By:</b> '.self::$user['name'].'<br>'.$_POST['comment'].'<br><br><br>Go to the QA Tracker:<br><a href="'.$url.'">'.$url.'</a>';
+
+						add_filter( 'wp_mail_content_type', array(__CLASS__, 'wp_mail_content_type') );
+						wp_mail($users[$nofity_user]['email'], $subject, $message, $headers);
+						remove_filter( 'wp_mail_content_type', array(__CLASS__, 'wp_mail_content_type') );
+					}
+				}
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+	public static function wp_mail_content_type()
+	{
+		return 'text/html';
 	}
 
 	private static function save_log($issue_id, $user, $log, $silent=false)
@@ -454,7 +502,7 @@ class GRAVITATE_QA_TRACKER {
 			// Create Image
 		    if(!empty($_POST['screenshot_data']))
 		    {
-		    	$image_name = 'capture_'.rand(0,9).time().rand(0,9).'.png';
+		    	$image_name = 'capture_'.rand(0,9).time().rand(0,9).'.jpg';
 		    	$upload_dir = wp_upload_dir();
 
 		    	if(!empty($upload_dir['path']))
@@ -465,7 +513,11 @@ class GRAVITATE_QA_TRACKER {
 
 			        if ($im !== false)
 			        {
-			            imagepng($im, $upload_dir['path'].'/'.$image_name);
+			        	ob_start();
+			            imagejpeg($im, null, 40);
+			            $new_image_data = ob_get_contents();
+  						ob_end_clean();
+
 			            imagedestroy($im);
 			        }
 			    }
@@ -487,7 +539,7 @@ class GRAVITATE_QA_TRACKER {
 				$postdata['priority'] = esc_sql($_POST['priority']);
 				$postdata['department'] = esc_sql($_POST['department']);
 				$postdata['created_by'] = esc_sql(self::$user['name']);
-				$postdata['screenshot'] = $upload_dir['url'].'/'.$image_name;
+				$postdata['screenshot_data'] = (!empty($new_image_data) ? 'data:image/jpeg;base64,'.base64_encode($new_image_data) : '');
 				$postdata['url'] = esc_sql($_POST['url']);
 				$postdata['browser'] = esc_sql($_POST['browser']);
 				$postdata['os'] = esc_sql($_POST['os']);
@@ -520,7 +572,7 @@ class GRAVITATE_QA_TRACKER {
 	{
 		if(self::$user)
 		{
-	    	wp_enqueue_script( 'js_plugins', plugins_url( 'js/html2canvas_0.5.0.js', __FILE__ ));
+	    	wp_enqueue_script( 'js_plugins', plugins_url( 'js/html2canvas_0.5.0.js', __FILE__ ), array(), self::$version);
 	    }
 	}
 
@@ -686,8 +738,8 @@ class GRAVITATE_QA_TRACKER {
 			<head>
 			<meta charset="utf-8">
 			<title>Issues</title>
-			<link rel="stylesheet" href="<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>" type="text/css"/>
-			<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>" rel="stylesheet">
+			<link rel="stylesheet" href="<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>?v=<?php echo self::$version;?>" type="text/css"/>
+			<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>?v=<?php echo self::$version;?>" rel="stylesheet">
 			<style>
 			html, body { height: 100%; overflow: hidden; }
 			</style>
@@ -734,8 +786,22 @@ class GRAVITATE_QA_TRACKER {
 				<input type="hidden" name="save_comment" value="1">
 				<input type="hidden" name="issue_id" value="<?php echo (!empty($_GET['issue_id']) ? $_GET['issue_id'] : '' );?>">
 				<label>Add Comment</label>
+				<label class="notify-header">Notify</label>
 				<textarea name="comment"></textarea>
+				<div class="notify-users">
+					<?php
+						$users = get_option(self::$users_key);
+
+						foreach ($users as $name => $user)
+						{
+							?>
+							<label><input type="checkbox" name="notify_users[]" value="<?php echo $name;?>" /> <?php echo $name;?></label>
+							<?php
+						}
+					?>
+				</div>
 				<input type="submit" name="submit" value="Submit">
+
 			</form>
 			</body>
 			</html>
@@ -750,20 +816,20 @@ class GRAVITATE_QA_TRACKER {
 		<head>
 		<meta charset="utf-8">
 		<title>Issues</title>
-		<link rel="stylesheet" href="<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>" type="text/css"/>
-		<link rel="stylesheet" href="<?php echo plugins_url( 'slickgrid/slick.grid.css', __FILE__ );?>" type="text/css"/>
-		<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>" rel="stylesheet">
+		<link rel="stylesheet" href="<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>?v=<?php echo self::$version;?>" type="text/css"/>
+		<link rel="stylesheet" href="<?php echo plugins_url( 'slickgrid/slick.grid.css', __FILE__ );?>?v=<?php echo self::$version;?>" type="text/css"/>
+		<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>?v=<?php echo self::$version;?>" rel="stylesheet">
 
 		<!-- Slick Grid does not work with updated version of jquery so load an older version -->
-		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery-1.7.min.js', __FILE__ );?>"></script>
-		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery-ui-1.8.16.custom.min.js', __FILE__ );?>"></script>
+		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery-1.7.min.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
+		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery-ui-1.8.16.custom.min.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
 
-		<script src="<?php echo plugins_url( 'js/colorbox.js', __FILE__ );?>"></script>
-		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery.event.drag-2.2.js', __FILE__ );?>"></script>
+		<script src="<?php echo plugins_url( 'js/colorbox.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
+		<script src="<?php echo plugins_url( 'slickgrid/lib/jquery.event.drag-2.2.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
 
-		<script src="<?php echo plugins_url( 'slickgrid/slick.core.js', __FILE__ );?>"></script>
-		<script src="<?php echo plugins_url( 'slickgrid/slick.grid.js', __FILE__ );?>"></script>
-		<script src="<?php echo plugins_url( 'slickgrid/slick.editors.js?v=01', __FILE__ );?>"></script>
+		<script src="<?php echo plugins_url( 'slickgrid/slick.core.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
+		<script src="<?php echo plugins_url( 'slickgrid/slick.grid.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
+		<script src="<?php echo plugins_url( 'slickgrid/slick.editors.js', __FILE__ );?>?v=<?php echo self::$version;?>"></script>
 
 		</head>
 		<body id="view-issues" class="<?php echo self::$access;?>-access">
@@ -795,7 +861,7 @@ class GRAVITATE_QA_TRACKER {
 				<?php } ?>
 			</select>
 
-			<a class="new-window" target="_blank" href="<?php echo self::$uri;?>view_issues=true"><i class="fa fa-external-link"></i></a>
+			<a class="new-window hide-for-small" target="_blank" href="<?php echo self::$uri;?>view_issues=true"><i class="fa fa-external-link"></i></a>
 
 			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
 			<input placeholder="Filter..." id="search" type="text">
@@ -1191,7 +1257,7 @@ class GRAVITATE_QA_TRACKER {
 			                priority: inner_start+"<select id=\"priority\" class=\"priority update_data\"><?php if(!empty(self::$settings['priorities'])){foreach(self::$settings['priorities'] as $k => $v){?><option data-order=\"<?php echo $k;?>\" data-color=\"<?php echo $v['color'];?>\" <?php selected($data['priority'], sanitize_title($v['value']));?> value=\"<?php echo sanitize_title($v['value']);?>\"><?php echo $v['value'];?></option><?php }} ?></select></p>",
 			                created_by: inner_start+"<?php echo ucwords($data['created_by']);?></p>",
 			                description: inner_start+'<?php echo $description;?></p>',
-			                info: inner_start+'<a class="btn" target="GravSupportWindowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-file-o"></i></a><a class="btn" target="GravSupportWindowMain" href="<?php echo str_replace(array('http:', 'https:'), '', $data['screenshot']);?>"><i class="fa fa-photo"></i></a><a class="btn external_link<?php if(empty($data['link'])){ ?> inactive<?php } ?>" <?php if(!empty($data['link'])){ ?>target="_blank" <?php } ?>title="<?php echo $data['link'];?>"<?php if(!empty($data['link'])){ ?> href="<?php echo $data['link'];?>"<?php } ?>><i class="fa fa-link"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a></p>'
+			                info: inner_start+'<a class="btn" target="GravSupportWindowMain" title="<?php echo $data['url'];?>" href="<?php echo site_url().$data['url'];?>"><i class="fa fa-file-o"></i></a><a class="btn<?php if(empty($data['screenshot_data'])){ ?> inactive"<?php }else{ ?>" target="GravSupportWindowMain" href="<?php echo str_replace(array('http:', 'https:'), '', (!empty($data['screenshot_data']) && strpos($data['screenshot_data'], 'data:image/jpeg;base64,') !== false ? $data['screenshot_data'] : ''));?>"<?php } ?>><i class="fa fa-photo"></i></a><a class="btn external_link<?php if(empty($data['link'])){ ?> inactive<?php } ?>" <?php if(!empty($data['link'])){ ?>target="_blank" <?php } ?>title="<?php echo $data['link'];?>"<?php if(!empty($data['link'])){ ?> href="<?php echo $data['link'];?>"<?php } ?>><i class="fa fa-link"></i></a><a class="btn comments" data-issue-id="<?php echo $issue->ID;?>" href="#"><i class="fa fa-comment<?php echo (empty($comments) ? "-o" : "");?>"></i></a><a class="btn" onclick=\'alert(\"URL: <?php echo $data['url'];?>\\n\\nBrowser: <?php echo $data['browser'];?>\\n\\nOS: <?php echo $data['os'];?>\\n\\n\\nBrowser Width: <?php echo $data['screen_width'];?>\\n\\nDevice Width: <?php echo $data['device_width'];?>\\n\\nIP: <?php echo $data['ip'];?>\\n\\n\\nDate Time: <?php echo date('M jS - g:ia', strtotime($issue->post_date));?>\");\'><i class="fa fa-info-circle"></i></a></p>'
 			            };
 
 			            data[<?php echo $num;?>] = raw_data;
@@ -1288,7 +1354,7 @@ class GRAVITATE_QA_TRACKER {
 		<head>
 		<meta charset="utf-8">
 		<title>Issues</title>
-		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
+		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>?v=<?php echo self::$version;?>' type='text/css' media='all' />
 		<script type='text/javascript'>
 			parent.showProfile();
 		</script>
@@ -1299,12 +1365,8 @@ class GRAVITATE_QA_TRACKER {
 				<form method="post">
 					<input type="hidden" name="save_user_profile" value="1">
 					<div class="left">
-						<label>Your Email *</label>
-						<input type="text" name="grav_issues_user_email" required>
-					</div>
-				    <div class="left">
-				        <label>Display Name *</label>
-				        <input type="text" name="grav_issues_user_name" required>
+						<input type="text" placeholder="Your Email *" name="grav_issues_user_email" required>
+				        <input type="text" placeholder="Display Name *" name="grav_issues_user_name" required>
 				    </div>
 				    <div class="right"><br>
 				        <input type="submit" name="submit" value="Next">
@@ -1325,9 +1387,9 @@ class GRAVITATE_QA_TRACKER {
 		<head>
 		<meta charset="utf-8">
 		<title>Issues</title>
-		<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>" rel="stylesheet">
-		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>' type='text/css' media='all' />
-		<script type='text/javascript' src='<?php echo includes_url();?>/js/jquery/jquery.js'></script>
+		<link href="<?php echo plugins_url( 'css/font-awesome.css', __FILE__ );?>?v=<?php echo self::$version;?>" rel="stylesheet">
+		<link rel='stylesheet' href='<?php echo plugins_url( 'css/gravitate-issue-tracker.css', __FILE__ );?>?v=<?php echo self::$version;?>' type='text/css' media='all' />
+		<script type='text/javascript' src='<?php echo includes_url();?>/js/jquery/jquery.js?v=<?php echo self::$version;?>'></script>
 		<script type='text/javascript'>
 
 		var $ = jQuery;
@@ -1568,17 +1630,23 @@ class GRAVITATE_QA_TRACKER {
 		        }
 		        else
 		        {
-		    		if(!storedLines.length)
-		    		{
-		    			//alert("You need to create at least one arrow pointing to the location of the issue.\n\nYou can create an arrow by clicking and dragging within the red box.");
-		    			if(confirm("There are no arrows pointing to an issue.\n\nClick OK if you want to submit the issue without creating any arrows")){
-		                    saveScreenshotData();
-		    			}
-		    		}
-		    		else
-		    		{
-		                saveScreenshotData();
-		    		}
+		        	if(!$('#include_screenshot:checked').length)
+		        	{
+		        		sendIssueData('');
+		        	}
+		        	else
+		        	{
+			    		if(!storedLines.length)
+			    		{
+			    			if(confirm("There are no arrows pointing to an issue.\n\nClick OK if you want to submit the issue without creating any arrows")){
+			                    saveScreenshotData();
+			    			}
+			    		}
+			    		else
+			    		{
+			                saveScreenshotData();
+			    		}
+			    	}
 		        }
 			});
 
@@ -1596,6 +1664,18 @@ class GRAVITATE_QA_TRACKER {
 				{
 					$(this).css('color', '#777');
 				}
+			});
+
+			$('#include_screenshot').on('click', function(e)
+			{
+				if(!$('#include_screenshot:checked').length)
+				{
+					if(!confirm('It is recommended to always create a screenshot with an arrow pointing to the issue\n\nClick OK to continue without creating screenshot (Not Recommended).'))
+					{
+						return false;
+					}
+				}
+				makeScreenshot();
 			});
 
 			$('.change-url-link').on('click', function(e)
@@ -1646,11 +1726,14 @@ class GRAVITATE_QA_TRACKER {
 				$('#issue').hide();
 				$('#controls').fadeIn();
 				$('#cancelCapture').show();
+				$('.change-url').addClass('darken');
 				makeScreenshot();
 				$('#controls textarea').focus();
 				$('#description').val('');
 				$('#department').val('');
 				$('#priority').val('');
+				$('#include_screenshot').attr('checked', 'checked');
+				$('#include_screenshot').prop('checked', true);
 				$('#link').val('');
 			}
 			else
@@ -1665,6 +1748,7 @@ class GRAVITATE_QA_TRACKER {
 			$('#controls').hide();
 			$('#cancelCapture').hide();
 			$('#issue').show();
+			$('.change-url').removeClass('darken');
 			closeScreenshot();
 		}
 
@@ -1729,6 +1813,44 @@ class GRAVITATE_QA_TRACKER {
 			}
 		}
 
+		function sendIssueData(img_data)
+		{
+			$.post( '<?php echo self::$uri;?>', {
+                save_issue: true,
+                status: 'pending',
+                description: $('#description').val(),
+                browser: navigator.sayswho,
+                device_width: jscd.screen,
+                screen_width: $(window).width(),
+                os: jscd.os +' '+ jscd.osVersion,
+                ip: '<?php echo self::real_ip();?>',
+                created_by: $('#created_by').val(),
+                department: $('#department').val(),
+                priority: $('#priority').val(),
+                screenshot_data: img_data,
+                url: parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search,
+                link: $('#link').val(),
+            },
+            function(response)
+            {
+                if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
+                {
+                    closeIssueCapture();
+                    parent.gravWindowMain.document.body.removeChild(parent.gravWindowMain.document.getElementById('captureLoadingDiv'));
+
+                    if(typeof parent.popupQaViewsWindow != 'undefined')
+                    {
+                    	parent.popupQaViewsWindow.window.location.reload(true);
+                    }
+                }
+                else
+                {
+                    // Error
+                    alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
+                }
+            });
+		}
+
 		function saveScreenshotData()
 		{
 		    var div = document.createElement("DIV");
@@ -1754,46 +1876,7 @@ class GRAVITATE_QA_TRACKER {
 
 		            if(img_data)
 		            {
-		                $.post( '<?php echo self::$uri;?>', {
-		                    save_issue: true,
-		                    status: 'pending',
-		                    description: $('#description').val(),
-		                    browser: navigator.sayswho,
-		                    device_width: jscd.screen,
-		                    screen_width: jQuery(window).width(),
-		                    os: jscd.os +' '+ jscd.osVersion,
-		                    ip: '<?php echo self::real_ip();?>',
-		                    created_by: $('#created_by').val(),
-		                    department: $('#department').val(),
-		                    priority: $('#priority').val(),
-		                    screenshot: '',
-		                    screenshot_data: img_data,
-		                    url: parent.gravWindowMain.location.pathname+parent.gravWindowMain.location.search,
-		                    link: $('#link').val(),
-		                },
-		                function(response)
-		                {
-		                    if(response && response.indexOf('GRAVITATE_ISSUE_AJAX_SUCCESSFULLY') > 0)
-		                    {
-		                        parent.closeIssue();
-		                        $('#controls').hide();
-		                        $('#issue-container').fadeIn();
-		                        $('#cancelCapture').hide();
-								$('#issue').show();
-		                        closeScreenshot();
-		                        parent.gravWindowMain.document.body.removeChild(parent.gravWindowMain.document.getElementById('captureLoadingDiv'));
-
-		                        if(typeof parent.popupQaViewsWindow != 'undefined')
-		                        {
-		                        	parent.popupQaViewsWindow.window.location.reload(true);
-		                        }
-		                    }
-		                    else
-		                    {
-		                        // Error
-		                        alert('There was an error Saving the Issue. Please try again or contact your Account Manager.');
-		                    }
-		                });
+		                sendIssueData(img_data);
 		            }
 		        },
 		        top: $(parent.gravWindowMain.window.document.getElementById('qadrawing')).offset().top,
@@ -2003,18 +2086,22 @@ class GRAVITATE_QA_TRACKER {
 		</head>
 		<body>
 		<div id="issue-container">
-			<button id="cancelCapture">Cancel</button><button id="issue">Submit Issue</button> &nbsp; &nbsp; <button id="view_issues">View Issues</button>
-			<a class="change-url-link"><i class="fa fa-globe"></i></a>
 			<form id="change-url-form">
-				<input class="change-url" type="text" name="change_url" placeholder="http://">
+				<div>
+					<a class="change-url-link"><i class="fa fa-home"></i></a>
+					<input class="change-url" type="text" name="change_url" placeholder="http://">
+				</div>
 			</form>
+			<button id="cancelCapture">Cancel</button><button id="issue">Submit Issue</button> &nbsp; &nbsp; <button id="view_issues">View Issues</button>
+
 			<a class="user-icon"><?php echo self::$user['name'];?> <i class="fa fa-user"></i></a>
 		</div>
 		<div id="controls"<?php if(self::$access == 'full'){ ?> class="full-access"<?php } ?>>
-			<div class="left" style="width: 63%;">
+			<div class="left" style="width: 61%;">
 				<br>
 				<textarea id="description" required placeholder="Description *"></textarea>
 				<br>
+				<span class="include-screenshot hide-for-small"><label><input type="checkbox" id="include_screenshot" name="include_screenshot" value="1" checked="checked"> <span class="hide-for-medium">Include</span> Screenshot</label></span>
 		        <select id="priority" name="priority" required>
 		        	<option value=""> - Priority * - </option>
 		        	<?php
@@ -2052,7 +2139,7 @@ class GRAVITATE_QA_TRACKER {
 		        <input type="text" id="link" name="link" placeholder="(optional link)">
 		        <button id="sendCapture">Submit Issue</button>
 			</div>
-			<div class="right" style="width: 34%;">
+			<div class="current-issues-container right hide-for-small" style="width: 35%;">
 				<br><label>Current Issues on this page</label><br>
 				<div id="current-issues">
 
@@ -2071,8 +2158,9 @@ class GRAVITATE_QA_TRACKER {
 		<head>
 		<meta charset="utf-8">
 		<title>QA Tracker</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<link rel="shortcut icon" href="<?php echo plugins_url( 'favicon.ico', __FILE__ );?>" type="image/x-icon" />
-		<script type='text/javascript' src='<?php echo includes_url();?>/js/jquery/jquery.js'></script>
+		<script type='text/javascript' src='<?php echo includes_url();?>/js/jquery/jquery.js?v=<?php echo self::$version;?>'></script>
 		<script type='text/javascript'>
 
 		var $ = jQuery;
@@ -2108,10 +2196,8 @@ class GRAVITATE_QA_TRACKER {
 
 		function openIssue()
 		{
-			var pace = 3;
-			var stop = 112;
-			var current = 28;
-		    $('frameset').attr('rows', 120 + ',*');
+			var w = $(window).width();
+		    $('frameset').attr('rows', (w > 600 ? 106 : 157) + ',*');
 		}
 
 		function showProfile()
@@ -2126,10 +2212,8 @@ class GRAVITATE_QA_TRACKER {
 
 		function closeIssue()
 		{
-			var pace = 3;
-			var stop = 112;
-			var current = 28;
-		    $('frameset').attr('rows', 34 + ',*');
+			var w = $(window).width();
+		    $('frameset').attr('rows', (w > 600 ? 34 : 60) + ',*');
 		}
 
 		var gravWindowControls;
